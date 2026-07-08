@@ -14,11 +14,16 @@ export async function apiRequest(path, { method = "GET", body, token, headers: c
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error("Falha de conexão com a API. Verifique a rede, a liberação de CORS e se o servidor está acessível.");
+  }
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;

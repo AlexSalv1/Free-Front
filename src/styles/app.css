@@ -378,6 +378,25 @@ button {
   cursor: not-allowed;
 }
 
+.secondary-action {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border: 1px solid #15161a;
+  border-radius: 12px;
+  background: #fff;
+  color: #15161a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.secondary-action:disabled {
+  border-color: #d8d7df;
+  color: #8f8e98;
+  background: #f8f7fb;
+  cursor: not-allowed;
+}
+
 .option-label {
   display: inline-flex;
   margin: 0 0 10px 8px;
@@ -462,6 +481,11 @@ button {
   border-radius: 14px;
   background: #f1f0f7;
   color: #17181c;
+}
+
+.photo-drop:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .photo-drop span {

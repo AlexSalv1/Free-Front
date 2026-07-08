@@ -37,5 +37,11 @@ export const api = {
   login: (payload) => apiRequest("/api/v1/auth/login", { method: "POST", body: payload }),
   criarCheckout: (payload, token) =>
     apiRequest("/api/v1/projetos/checkout", { method: "POST", body: payload, token }),
+  confirmarToken: (projetoId, payload, token) =>
+    apiRequest(`/api/v1/projetos/${projetoId}/confirmar-token`, { method: "POST", body: payload, token }),
+  concluirComFoto: (projetoId, payload, token) =>
+    apiRequest(`/api/v1/projetos/${projetoId}/concluir-com-foto`, { method: "POST", body: payload, token }),
+  liquidarPorDecurso: (projetoId, token) =>
+    apiRequest(`/api/v1/projetos/${projetoId}/liquidar-decurso`, { method: "POST", token }),
   checarVersao: (payload) => apiRequest("/api/v1/versao/check", { method: "POST", body: payload }),
 };

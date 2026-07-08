@@ -146,7 +146,7 @@ function StatusMessage({ state }) {
   return <section className={`inline-result ${state.type || ""}`}>{state.message}</section>;
 }
 
-function CheckoutScreen({ payment, setPayment, auth }) {
+function CheckoutScreen({ payment, setPayment, auth, onProjectCreated, onOpenCompletion }) {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [cashAccepted, setCashAccepted] = useState(false);
   const [status, setStatus] = useState(null);
@@ -178,7 +178,9 @@ function CheckoutScreen({ payment, setPayment, auth }) {
         },
         auth.accessToken,
       );
+      onProjectCreated(projeto);
       setStatus({ type: "success", message: `Projeto criado com status ${projeto.status}. Token: ${projeto.tokenValidacao}` });
+      onOpenCompletion();
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {
@@ -237,14 +239,73 @@ function CheckoutScreen({ payment, setPayment, auth }) {
   );
 }
 
-function CompleteScreen() {
+function CompleteScreen({ auth, projetoAtual, onProjectUpdated }) {
   const [token, setToken] = useState("");
   const [photoSent, setPhotoSent] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
   const tokenComplete = token.length === 4;
+  const canUseApi = auth?.accessToken && projetoAtual?.id;
+
+  const confirmarToken = async () => {
+    if (!canUseApi || !tokenComplete) {
+      setStatus({ type: "error", message: "Crie um projeto no checkout e informe o token de 4 digitos." });
+      return;
+    }
+
+    setLoading(true);
+    setStatus(null);
+    try {
+      const projeto = await api.confirmarToken(projetoAtual.id, { token }, auth.accessToken);
+      onProjectUpdated(projeto);
+      setStatus({ type: "success", message: `Servico finalizado com sucesso. Status atual: ${projeto.status}.` });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const concluirComFoto = async () => {
+    if (!canUseApi) {
+      setStatus({ type: "error", message: "Crie um projeto no checkout antes de concluir o servico." });
+      return;
+    }
+
+    setLoading(true);
+    setStatus(null);
+    try {
+      const imagemBase64 = window.btoa(`conclusao-servico:${projetoAtual.id}:${Date.now()}`);
+      const projeto = await api.concluirComFoto(
+        projetoAtual.id,
+        { imagemBase64, clienteAutorizouFoto: true },
+        auth.accessToken,
+      );
+      onProjectUpdated(projeto);
+      setPhotoSent(true);
+      setStatus({ type: "success", message: "Foto enviada. Projeto em revisao e cronometro de 48 horas iniciado." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="screen">
       <AppHeader title="Concluir Servico" subtitle="Confirme a entrega para liberar o pagamento" />
+
+      <section className="inline-result">
+        <KeyRound size={16} />
+        {projetoAtual?.id ? (
+          <span>
+            Projeto ativo: <strong>{projetoAtual.tituloServico}</strong> - status {projetoAtual.status}. Token atual:{" "}
+            <strong>{projetoAtual.tokenValidacao}</strong>
+          </span>
+        ) : (
+          <span>Finalize primeiro um checkout para liberar as acoes de conclusao.</span>
+        )}
+      </section>
 
       <span className="option-label">Opcao A - Recomendada</span>
       <section className="completion-card">
@@ -269,9 +330,12 @@ function CompleteScreen() {
         {tokenComplete ? (
           <div className="inline-success">
             <Check size={16} />
-            Token validado. Liquidacao instantanea liberada.
+            Token pronto para envio e liquidacao instantanea.
           </div>
         ) : null}
+        <button className="secondary-action" disabled={!tokenComplete || loading} onClick={confirmarToken}>
+          {loading ? "Validando..." : "Confirmar com token"}
+        </button>
       </section>
 
       <div className="or-divider">
@@ -291,12 +355,14 @@ function CompleteScreen() {
             <small>Envie uma foto do servico concluido.</small>
           </div>
         </div>
-        <button className={`photo-drop ${photoSent ? "done" : ""}`} onClick={() => setPhotoSent(true)}>
+        <button className={`photo-drop ${photoSent ? "done" : ""}`} onClick={concluirComFoto} disabled={loading}>
           <Camera size={28} />
           <strong>{photoSent ? "Foto enviada para analise" : "Tirar foto agora"}</strong>
           <span>{photoSent ? "Cronometro de 48 horas iniciado" : "Enquadre a area onde o servico foi executado"}</span>
         </button>
       </section>
+
+      <StatusMessage state={status} />
 
       <section className="privacy-panel">
         <Shield size={17} />
@@ -414,10 +480,10 @@ function OnboardingScreen({ onAuthenticated }) {
   const [verified, setVerified] = useState(false);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-  const credentials = {
-    email: "rafael.secure@example.com",
+  const [credentials] = useState(() => ({
+    email: `rafael.secure.${Date.now()}@example.com`,
     senha: "SenhaForte123",
-  };
+  }));
   const documentReady = documento.replace(/\D/g, "").length >= 11;
 
   const register = async () => {
@@ -621,6 +687,7 @@ export default function App() {
   const [activeScreen, setActiveScreen] = useState("home");
   const [payment, setPayment] = useState("CARTAO");
   const [auth, setAuth] = useState(null);
+  const [projetoAtual, setProjetoAtual] = useState(null);
 
   const selectPayment = (methodId) => {
     setPayment(methodId);
@@ -634,8 +701,18 @@ export default function App() {
           <HomeScreen setPayment={selectPayment} onOpenOnboarding={() => setActiveScreen("onboarding")} />
         ) : null}
         {activeScreen === "onboarding" ? <OnboardingScreen onAuthenticated={setAuth} /> : null}
-        {activeScreen === "checkout" ? <CheckoutScreen payment={payment} setPayment={setPayment} auth={auth} /> : null}
-        {activeScreen === "complete" ? <CompleteScreen /> : null}
+        {activeScreen === "checkout" ? (
+          <CheckoutScreen
+            payment={payment}
+            setPayment={setPayment}
+            auth={auth}
+            onProjectCreated={setProjetoAtual}
+            onOpenCompletion={() => setActiveScreen("complete")}
+          />
+        ) : null}
+        {activeScreen === "complete" ? (
+          <CompleteScreen auth={auth} projetoAtual={projetoAtual} onProjectUpdated={setProjetoAtual} />
+        ) : null}
         {activeScreen === "wallet" ? <WalletScreen /> : null}
         <BottomNav active={activeScreen} onChange={setActiveScreen} />
       </div>

@@ -2002,8 +2002,8 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
       setStatus({
         type: "success",
         message: response.otpSandboxDisponivel
-          ? "Cadastro criado em sandbox. Os códigos retornaram apenas para este ambiente de teste."
-          : "Cadastro criado. Digite os códigos recebidos nos canais mascarados para concluir o OTP.",
+          ? "Cadastro criado com sucesso. Os codigos de verificacao foram liberados apenas neste ambiente de teste."
+          : "Cadastro criado com sucesso. Informe os codigos recebidos para concluir a verificacao.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
@@ -2019,7 +2019,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
       const login = await api.login(loginDraft);
       const authSession = await hydrateAuthSession(login, { email: loginDraft.email });
       onAuthenticated(authSession);
-      setStatus({ type: "success", message: "Sessao restaurada com sucesso neste dispositivo." });
+      setStatus({ type: "success", message: "Login realizado com sucesso neste dispositivo." });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {
@@ -2048,7 +2048,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
       setVerified(true);
       setStatus({
         type: "success",
-        message: "Conta autenticada. O acesso básico foi liberado e o cadastro ficou sinalizado para análise KYC/KYB.",
+        message: "Conta verificada com sucesso. Seu acesso foi liberado e o cadastro segue para validacao complementar.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
@@ -2105,7 +2105,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
               </button>
             </div>
 
-            {DEMO_LOGIN_EMAIL ? <div className="auth-helper-note">Acesso demo controlado disponível neste ambiente.</div> : null}
+            {DEMO_LOGIN_EMAIL ? <div className="auth-helper-note">Acesso de demonstracao disponivel neste ambiente de teste.</div> : null}
           </section>
         ) : (
           <>
@@ -2563,7 +2563,7 @@ export default function App() {
         } else {
           setAuth(null);
           if (session.auth) {
-            setAuthNotice("Sua sessão salva expirou. Entre novamente para continuar com segurança.");
+            setAuthNotice("Sua sessao expirou neste dispositivo. Entre novamente para continuar.");
           }
         }
         setProjetoAtual(session.projetoAtual || null);
@@ -2653,7 +2653,7 @@ export default function App() {
         }
 
         setCategorias([]);
-        setCategoriasStatus({ type: "error", message: `Não foi possível carregar categorias reais: ${error.message}` });
+        setCategoriasStatus({ type: "error", message: `Nao foi possivel carregar as categorias agora. ${error.message}` });
       })
       .finally(() => {
         if (active) {
@@ -2686,7 +2686,7 @@ export default function App() {
         }
 
         setProfissionais([]);
-        setProfissionaisStatus({ type: "error", message: `Não foi possível carregar a vitrine: ${error.message}` });
+        setProfissionaisStatus({ type: "error", message: `Nao foi possivel carregar os profissionais agora. ${error.message}` });
       })
       .finally(() => {
         if (active) {
@@ -2714,7 +2714,7 @@ export default function App() {
 
         setVersaoStatus({
           type: response.compativel ? "success" : "warning",
-          message: `${response.mensagem}. Instalada ${APP_VERSION} | mínima ${response.versaoMinima}.`,
+          message: `${response.mensagem}. Versao instalada ${APP_VERSION} e versao minima ${response.versaoMinima}.`,
         });
         if (dismissedVersionNotice !== APP_VERSION) {
           setShowVersionModal(true);
@@ -2727,7 +2727,7 @@ export default function App() {
 
         setVersaoStatus({
           type: "error",
-          message: `Não foi possível validar a versão do app: ${error.message}`,
+          message: `Nao foi possivel validar a versao do aplicativo agora. ${error.message}`,
         });
         if (dismissedVersionNotice !== APP_VERSION) {
           setShowVersionModal(true);

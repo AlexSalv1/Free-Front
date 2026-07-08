@@ -9,7 +9,7 @@ export const serviceOrder = {
   title: "Instalacao de Chuveiro Eletrico",
   date: "Sex, 15/05",
   time: "14:00",
-  location: "Rua das Palmeiras, 245 - Sao Paulo",
+  location: "Regiao aproximada: Vila Mariana - Sao Paulo",
   neighborhood: "Sao Paulo - Vila Mariana",
   value: 180,
 };

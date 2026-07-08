@@ -1,0 +1,6 @@
+{
+  "appId": "com.marketplace.servicos",
+  "appName": "Servicos Marketplace",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

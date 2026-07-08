@@ -32,6 +32,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { api } from "./api/client.js";
+import authSlideClient from "./assets/auth-slide-client.jpg";
+import authSlidePro from "./assets/auth-slide-pro.jpg";
 import { paymentMethods, professional, serviceOrder } from "./data/mockData.js";
 import { captureProfileImage, captureServiceImage } from "./utils/camera.js";
 import { buildLocationProofLabel, captureCurrentLocation, formatLocationLabel } from "./utils/location.js";
@@ -66,6 +68,23 @@ const DEFAULT_NEGOTIATION_FLOW = {
   paymentAligned: false,
   messages: [],
 };
+
+const AUTH_SLIDES = [
+  {
+    id: "cliente",
+    image: authSlideClient,
+    eyebrow: "Contratação simples",
+    title: "Encontre profissionais e contrate serviços com confiança",
+    description: "Compare opções, alinhe detalhes e acompanhe tudo com mais praticidade e segurança.",
+  },
+  {
+    id: "prestador",
+    image: authSlidePro,
+    eyebrow: "Tudo pelo app",
+    title: "O jeito mais simples de encontrar e contratar profissionais",
+    description: "Um só app para contratar, negociar e pagar com clareza em cada etapa do serviço.",
+  },
+];
 
 function createNegotiationSeed(selectedService) {
   return {
@@ -1912,6 +1931,7 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
 function AuthScreen({ onAuthenticated, sessionNotice }) {
   const [mode, setMode] = useState("login");
   const [loginExpanded, setLoginExpanded] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
   const [accepted, setAccepted] = useState(false);
   const [loginDraft, setLoginDraft] = useState({ email: DEMO_LOGIN_EMAIL, senha: "" });
   const [registerDraft, setRegisterDraft] = useState({
@@ -1934,6 +1954,18 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
       setStatus({ type: "warning", message: sessionNotice });
     }
   }, [sessionNotice]);
+
+  useEffect(() => {
+    if (mode !== "login" || loginExpanded) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % AUTH_SLIDES.length);
+    }, 3800);
+
+    return () => window.clearInterval(timer);
+  }, [mode, loginExpanded]);
 
   const openLogin = () => {
     setMode("login");
@@ -2037,15 +2069,31 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
         {mode === "login" && !loginExpanded ? (
           <section className="auth-entry-card auth-showcase-card">
             <div className="auth-showcase-media">
-              <div className="auth-showcase-orb" />
-              <div className="auth-showcase-portrait">
-                <div className="auth-showcase-avatar">{professional.initials}</div>
-              </div>
+              {AUTH_SLIDES.map((slide, index) => (
+                <article
+                  key={slide.id}
+                  className={`auth-slide ${index === activeSlide ? "active" : ""}`}
+                  aria-hidden={index === activeSlide ? "false" : "true"}
+                >
+                  <img src={slide.image} alt="" />
+                  <div className="auth-showcase-copy">
+                    <span>{slide.eyebrow}</span>
+                    <h2>{slide.title}</h2>
+                    <p>{slide.description}</p>
+                  </div>
+                </article>
+              ))}
             </div>
 
-            <div className="auth-showcase-copy">
-              <h2>Conta digital para serviços com mais segurança</h2>
-              <p>Contrate, negocie e acompanhe pagamentos em um fluxo simples, confiável e pensado para o uso no dia a dia.</p>
+            <div className="auth-slide-indicators" aria-label="Destaques do aplicativo">
+              {AUTH_SLIDES.map((slide, index) => (
+                <button
+                  key={slide.id}
+                  className={index === activeSlide ? "active" : ""}
+                  onClick={() => setActiveSlide(index)}
+                  aria-label={`Mostrar slide ${index + 1}`}
+                />
+              ))}
             </div>
 
             <div className="auth-showcase-actions">

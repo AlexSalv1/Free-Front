@@ -1122,7 +1122,7 @@ button {
   justify-items: center;
   gap: 10px;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .auth-hero-mark {
@@ -1156,7 +1156,81 @@ button {
 .auth-entry-card {
   display: grid;
   gap: 12px;
-  justify-items: center;
+}
+
+.auth-showcase-card {
+  padding: 18px 18px 16px;
+  border: 1px solid #ececf1;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(17 18 24 / 5%);
+}
+
+.auth-showcase-media {
+  position: relative;
+  min-height: 236px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #f1f0f7;
+}
+
+.auth-showcase-orb {
+  position: absolute;
+  inset: 18px 28px auto;
+  height: 150px;
+  border-radius: 34px;
+  background: linear-gradient(180deg, #1d1e24 0%, #2a2c35 100%);
+}
+
+.auth-showcase-portrait {
+  position: relative;
+  width: 172px;
+  height: 172px;
+  display: grid;
+  place-items: center;
+  border-radius: 40px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgb(15 16 22 / 14%);
+}
+
+.auth-showcase-avatar {
+  width: 124px;
+  height: 124px;
+  display: grid;
+  place-items: center;
+  border-radius: 36px;
+  background:
+    radial-gradient(circle at 45% 28%, #d8ab82 0 18%, transparent 19%),
+    linear-gradient(145deg, #293d53, #8d684a 58%, #ead9cb);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.auth-showcase-copy {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.auth-showcase-copy h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.auth-showcase-copy p {
+  margin: 0;
+  color: #6f6e77;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.auth-showcase-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 .auth-card {
@@ -1177,6 +1251,21 @@ button {
   min-height: 44px;
   padding: 0 24px;
   border-radius: 16px;
+}
+
+.auth-stack-button {
+  width: 100%;
+}
+
+.auth-outline-button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #dddde6;
+  border-radius: 16px;
+  background: #fff;
+  color: #1b1c22;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .text-link-button {
@@ -1310,6 +1399,15 @@ button {
 
   .auth-shell {
     width: min(100%, 360px);
+  }
+
+  .auth-showcase-media {
+    min-height: 224px;
+  }
+
+  .auth-showcase-portrait {
+    width: 164px;
+    height: 164px;
   }
 }
 

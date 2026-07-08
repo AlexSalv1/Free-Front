@@ -2035,13 +2035,28 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
         </header>
 
         {mode === "login" && !loginExpanded ? (
-            <section className="auth-entry-card">
-            <button className="primary-action auth-main-button" onClick={openLogin}>
-              Login
-            </button>
-            <button className="text-link-button auth-secondary-link" onClick={openRegister}>
-              Ainda não tem cadastro? Criar conta
-            </button>
+          <section className="auth-entry-card auth-showcase-card">
+            <div className="auth-showcase-media">
+              <div className="auth-showcase-orb" />
+              <div className="auth-showcase-portrait">
+                <div className="auth-showcase-avatar">{professional.initials}</div>
+              </div>
+            </div>
+
+            <div className="auth-showcase-copy">
+              <h2>Conta digital para serviços com mais segurança</h2>
+              <p>Contrate, negocie e acompanhe pagamentos em um fluxo simples, confiável e pensado para o uso no dia a dia.</p>
+            </div>
+
+            <div className="auth-showcase-actions">
+              <button className="secondary-action auth-outline-button" onClick={openLogin}>
+                Já tem conta? Acesse
+              </button>
+              <button className="primary-action auth-main-button auth-stack-button" onClick={openRegister}>
+                Criar conta gratuita
+              </button>
+            </div>
+
             {DEMO_LOGIN_EMAIL ? <div className="auth-helper-note">Acesso demo controlado disponível neste ambiente.</div> : null}
           </section>
         ) : (

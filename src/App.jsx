@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -44,13 +44,14 @@ const currency = new Intl.NumberFormat("pt-BR", {
 const LEGAL_VERSION = import.meta.env.VITE_LEGAL_VERSION || "2026.07";
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || "1.0.0";
 const ENABLE_OFFLINE_FALLBACK = import.meta.env.VITE_ENABLE_OFFLINE_FALLBACK === "true";
+const DEMO_LOGIN_EMAIL = import.meta.env.VITE_DEMO_LOGIN_EMAIL || "";
 const DEFAULT_QUOTE_DRAFT = {
-  titulo: "Preciso de ajuda com instalacao eletrica",
+  titulo: "Preciso de ajuda com instalação elétrica",
   categoria: "Reformas e Reparos",
   subcategoria: "Eletricista",
-  descricao: "Preciso avaliar a instalacao de um chuveiro e possivel ajuste no disjuntor.",
+  descricao: "Preciso avaliar a instalação de um chuveiro e possível ajuste no disjuntor.",
   bairro: "Vila Mariana",
-  cidade: "Sao Paulo",
+  cidade: "São Paulo",
   urgencia: "Hoje",
 };
 const DEFAULT_NEGOTIATION_FLOW = {
@@ -75,16 +76,63 @@ function createNegotiationSeed(selectedService) {
         id: `${selectedService.professionalId}-intro`,
         author: "prestador",
         tone: "neutral",
-        text: `Posso atender ${selectedService.title.toLowerCase()} com confirmacao pelo app. Antes da liberacao do endereco, vamos alinhar escopo, janela de atendimento e forma de pagamento.`,
+        text: `Posso atender ${selectedService.title.toLowerCase()} com confirmação pelo app. Antes da liberação do endereço, vamos alinhar escopo, janela de atendimento e forma de pagamento.`,
       },
       {
         id: `${selectedService.professionalId}-cliente`,
         author: "cliente",
         tone: "soft",
-        text: `Perfeito. A regiao aproximada atende. Quero confirmar o servico em ${selectedService.date} por volta de ${selectedService.time}.`,
+        text: `Perfeito. A região aproximada atende. Quero confirmar o serviço em ${selectedService.date} por volta de ${selectedService.time}.`,
       },
     ],
   };
+}
+
+function formatVerificationStatus(status) {
+  switch (status) {
+    case "PENDENTE_OTP":
+      return "Aguardando OTP";
+    case "OTP_VERIFICADO":
+      return "OTP verificado";
+    case "KYC_EM_ANALISE":
+      return "KYC/KYB em análise";
+    case "KYC_APROVADO":
+      return "Cadastro aprovado";
+    case "KYC_REJEITADO":
+      return "Cadastro rejeitado";
+    default:
+      return "Pendente";
+  }
+}
+
+function isAuthSessionValid(auth) {
+  if (!auth?.accessToken || !auth?.expiraEm) {
+    return false;
+  }
+
+  const expiration = new Date(auth.expiraEm);
+  return !Number.isNaN(expiration.getTime()) && expiration.getTime() > Date.now();
+}
+
+async function hydrateAuthSession(loginResponse, fallback = {}) {
+  try {
+    const profile = await api.buscarUsuario(loginResponse.usuarioId, loginResponse.accessToken);
+    return {
+      ...loginResponse,
+      nomeExibicao: profile.nomeExibicao,
+      email: profile.email,
+      tipoUsuario: profile.tipoUsuario,
+      statusUsuario: profile.statusUsuario,
+      statusVerificacaoCadastral: profile.statusVerificacaoCadastral,
+      cadastroVerificado: profile.cadastroVerificado,
+      contaDemo: profile.contaDemo,
+    };
+  } catch {
+    return {
+      ...loginResponse,
+      ...fallback,
+    };
+  }
 }
 
 function normalizeNegotiationResponse(response) {
@@ -127,24 +175,24 @@ function LegalConsentModal({ accepted, setAccepted, onAccept }) {
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="legal-consent-title">
       <section className="legal-modal">
-        <span className="option-label">Obrigatorio</span>
+        <span className="option-label">Obrigatório</span>
         <h2 id="legal-consent-title">Aceite de Termos e Privacidade</h2>
         <p>
-          Antes de usar recursos com impacto financeiro, validacao de identidade, geolocalizacao, camera ou
-          comprovacao de servico, precisamos registrar seu aceite desta versao juridica.
+          Antes de usar recursos com impacto financeiro, validação de identidade, geolocalização, câmera ou
+          comprovação de serviço, precisamos registrar seu aceite desta versão jurídica.
         </p>
 
         <div className="legal-summary">
           <div>
             <strong>Termos de Uso</strong>
-            <span>Define responsabilidades, pagamento, contestacoes e conduta na plataforma.</span>
+            <span>Define responsabilidades, pagamento, contestações e conduta na plataforma.</span>
           </div>
           <div>
-            <strong>Politica de Privacidade</strong>
-            <span>Explica uso de documento, localizacao, imagens e trilhas de auditoria.</span>
+            <strong>Política de Privacidade</strong>
+            <span>Explica o uso de documento, localização, imagens e trilhas de auditoria.</span>
           </div>
           <div>
-            <strong>Versao juridica</strong>
+            <strong>Versão jurídica</strong>
             <span>{LEGAL_VERSION}</span>
           </div>
         </div>
@@ -152,8 +200,8 @@ function LegalConsentModal({ accepted, setAccepted, onAccept }) {
         <label className="terms-panel legal-accept-panel">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
           <span>
-            Li e aceito os <strong>Termos de Uso</strong> e a <strong>Politica de Privacidade</strong> desta versao.
-            Estou ciente de que o aceite sera registrado para liberar o uso do app.
+            Li e aceito os <strong>Termos de Uso</strong> e a <strong>Política de Privacidade</strong> desta versão.
+            Estou ciente de que o aceite será registrado para liberar o uso do app.
           </span>
         </label>
 
@@ -174,16 +222,16 @@ function VersionNoticeModal({ status, onClose }) {
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="version-notice-title">
       <section className="legal-modal">
         <span className="option-label">Aplicativo</span>
-        <h2 id="version-notice-title">Verificacao de versao</h2>
+        <h2 id="version-notice-title">Verificação de versão</h2>
         <p>{status.message}</p>
         <div className="legal-summary">
           <div>
-            <strong>Versao instalada</strong>
+            <strong>Versão instalada</strong>
             <span>{APP_VERSION}</span>
           </div>
           <div>
             <strong>Status</strong>
-            <span>{status.type === "error" ? "Validacao indisponivel" : status.type === "warning" ? "Atencao" : "Compativel"}</span>
+            <span>{status.type === "error" ? "Validação indisponível" : status.type === "warning" ? "Atenção" : "Compatível"}</span>
           </div>
         </div>
         <button className="primary-action legal-accept-button" onClick={onClose}>
@@ -202,8 +250,8 @@ function SessionBanner({ auth, onReset }) {
   return (
     <section className="session-banner">
       <div>
-        <strong>Sessao ativa</strong>
-        <span>{auth.nomeExibicao || auth.email || "Prestador autenticado"}</span>
+        <strong>Sessão ativa</strong>
+        <span>{auth.nomeExibicao || auth.email || "Prestador autenticado"}{auth?.contaDemo ? " · modo demo" : ""}</span>
       </div>
       <button onClick={onReset}>Sair</button>
     </section>
@@ -240,12 +288,12 @@ function ServiceCard({ selectedService }) {
       </div>
       {!selectedService.addressReleased ? (
         <div className="address-privacy-note">
-          Endereco completo liberado apenas depois da confirmacao do atendimento pelas duas partes.
+          Endereço completo liberado apenas depois da confirmação do atendimento pelas duas partes.
         </div>
       ) : null}
 
       <div className="price-row">
-        <span>Valor do servico</span>
+        <span>Valor do serviço</span>
         <strong>{currency.format(selectedService.value)}</strong>
       </div>
     </section>
@@ -316,7 +364,7 @@ function CategoryCard({ category, onSelectSubcategory }) {
     <section className="category-card">
       <div className="category-card-head">
         <strong>{category.nome}</strong>
-        <span>{category.subcategorias.length} servicos</span>
+        <span>{category.subcategorias.length} serviços</span>
       </div>
       <div className="subcategory-list">
         {category.subcategorias.map((item) => (
@@ -353,12 +401,12 @@ function ProfessionalCard({ item, onHire }) {
       <p>{item.descricaoCurta}</p>
       <div className="professional-card-meta">
         <span>{item.tempoResposta}</span>
-        <span>Endereco completo so aparece apos confirmacao mutua</span>
+        <span>Endereço completo só aparece após confirmação mútua</span>
         <span>Nota {Number(item.notaMedia).toFixed(1)}</span>
         <strong>A partir de {currency.format(Number(item.precoInicial))}</strong>
       </div>
       <button className="secondary-action" onClick={() => onHire(item)}>
-        Selecionar servico
+        Selecionar serviço
       </button>
     </section>
   );
@@ -388,7 +436,7 @@ function ProposalCard({ proposal, onAccept, disabled }) {
       <p>{proposal.mensagem}</p>
       <div className="professional-card-meta">
         <span>{proposal.prazo}</span>
-        <span>Endereco completo segue bloqueado ate confirmacao mutua</span>
+        <span>Endereço completo segue bloqueado até a confirmação mútua</span>
         <span>Nota {Number(proposal.notaMedia).toFixed(1)}</span>
         <strong>{currency.format(Number(proposal.valor))}</strong>
       </div>
@@ -454,7 +502,7 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
         proposals: propostas,
         loading: false,
       }));
-      setStatus({ type: "success", message: "Pedido publicado. As propostas iniciais ja estao disponiveis para analise." });
+      setStatus({ type: "success", message: "Pedido publicado. As propostas iniciais já estão disponíveis para análise." });
     } catch (error) {
       setQuoteFlow((current) => ({ ...current, loading: false }));
       setStatus({ type: "error", message: error.message });
@@ -485,7 +533,7 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
 
   return (
     <main className="screen">
-      <AppHeader title="Aberto a Orcamentos" subtitle="Publique a necessidade e compare propostas com seguranca" />
+      <AppHeader title="Aberto a Orçamentos" subtitle="Publique a necessidade e compare propostas com segurança" />
 
       <section className="kyc-card">
         <div className="completion-heading">
@@ -494,7 +542,7 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
           </IconBox>
           <div>
             <strong>Pedido do contratante</strong>
-            <small>Use apenas regiao aproximada. O endereco completo segue protegido ate a confirmacao mutua.</small>
+            <small>Use apenas região aproximada. O endereço completo segue protegido até a confirmação mútua.</small>
           </div>
         </div>
 
@@ -507,7 +555,7 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
         ) : (
           <div className="form-stack">
           <label>
-            Titulo do servico
+            Título do serviço
             <input value={quoteFlow.draft.titulo} onChange={(event) => updateDraft("titulo", event.target.value.slice(0, 80))} />
           </label>
           <label>
@@ -540,7 +588,7 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
             </select>
           </label>
           <label>
-            Descricao
+            Descrição
             <textarea
               className="multiline-input"
               value={quoteFlow.draft.descricao}
@@ -613,7 +661,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
         profissionalId: selectedService.professionalId,
         tituloServico: selectedService.title,
         resumoEscopo: selectedService.description,
-        bairro: selectedService.neighborhood?.split(" - ")[1] || "Regiao validada",
+        bairro: selectedService.neighborhood?.split(" - ")[1] || "Região validada",
         cidade: selectedService.neighborhood?.split(" - ")[0] || "Cidade validada",
         valorAcordado: selectedService.value,
         dataSugerida: negotiationFlow.suggestedDate,
@@ -636,7 +684,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
           }));
           setStatus({
             type: "error",
-            message: `Nao foi possivel iniciar a negociacao com a API: ${error.message}`,
+            message: `Não foi possível iniciar a negociação com a API: ${error.message}`,
           });
           return;
         }
@@ -647,7 +695,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
           messages: current.messages.length ? current.messages : createNegotiationSeed(selectedService).messages,
           paymentAligned: true,
         }));
-        setStatus({ type: "warning", message: "API de negociacao ainda nao publicada. Fluxo local de teste mantido temporariamente." });
+        setStatus({ type: "warning", message: "API de negociação ainda não publicada. Fluxo local de teste mantido temporariamente." });
       });
 
     return () => {
@@ -740,7 +788,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
 
   const applySchedule = async () => {
     if (!negotiationFlow.suggestedDate || !negotiationFlow.suggestedTime) {
-      setStatus({ type: "error", message: "Defina data e horario antes de registrar a janela do atendimento." });
+      setStatus({ type: "error", message: "Defina data e horário antes de registrar a janela do atendimento." });
       return;
     }
 
@@ -748,7 +796,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
       pushMessage({
         author: "sistema",
         tone: "soft",
-        text: `Janela sugerida atualizada para ${negotiationFlow.suggestedDate} as ${negotiationFlow.suggestedTime}. O endereco completo continua bloqueado ate a confirmacao mutua.`,
+        text: `Janela sugerida atualizada para ${negotiationFlow.suggestedDate} às ${negotiationFlow.suggestedTime}. O endereço completo continua bloqueado até a confirmação mútua.`,
       });
       setStatus({ type: "success", message: "Janela de atendimento registrada." });
       return;
@@ -783,12 +831,12 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
 
   return (
     <main className="screen">
-      <AppHeader title="Conversa e Combinacao" subtitle="Alinhe escopo, horario e pagamento antes da confirmacao final" />
+      <AppHeader title="Conversa e Combinação" subtitle="Alinhe escopo, horário e pagamento antes da confirmação final" />
       <ServiceCard selectedService={selectedService} />
 
       <section className="agreement-note">
         <ShieldAlert size={18} />
-        <p>Esta etapa compartilha apenas contexto operacional minimo. Rua, numero, telefone e dados sensiveis seguem bloqueados ate a confirmacao mutua.</p>
+        <p>Esta etapa compartilha apenas contexto operacional mínimo. Rua, número, telefone e dados sensíveis seguem bloqueados até a confirmação mútua.</p>
       </section>
 
       <section className="section-block">
@@ -823,7 +871,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
         <div className="quick-actions">
           <button onClick={() => addQuickMessage("Quero confirmar o escopo antes de seguir para o pagamento.")}>Confirmar escopo</button>
           <button onClick={() => addQuickMessage("Consigo seguir neste valor apresentado pelo app.")}>Confirmar valor</button>
-          <button onClick={() => addQuickMessage("Se precisar, posso ajustar a janela de atendimento.")}>Ajustar horario</button>
+          <button onClick={() => addQuickMessage("Se precisar, posso ajustar a janela de atendimento.")}>Ajustar horário</button>
         </div>
 
         <label>
@@ -920,7 +968,7 @@ function NegotiationScreen({ selectedService, negotiationFlow, setNegotiationFlo
         Voltar
       </button>
       <button className="primary-action" disabled={!canContinue || negotiationFlow.loading} onClick={continueWithAgreement}>
-        Ir para confirmacao mutua
+        Ir para confirmação mútua
       </button>
     </main>
   );
@@ -951,7 +999,7 @@ function AgreementScreen({ selectedService, onBack, onAgreementConfirmed }) {
       .catch((error) => {
         if (!active) return;
         setReviewsSummary(null);
-        setReviewsStatus({ type: "error", message: `Nao foi possivel carregar as avaliacoes publicas: ${error.message}` });
+        setReviewsStatus({ type: "error", message: `Não foi possível carregar as avaliações públicas: ${error.message}` });
       });
 
     return () => {
@@ -961,7 +1009,7 @@ function AgreementScreen({ selectedService, onBack, onAgreementConfirmed }) {
 
   return (
     <main className="screen">
-      <AppHeader title="Combinar Servico" subtitle="Endereco completo so aparece apos confirmacao mutua" />
+      <AppHeader title="Combinar Serviço" subtitle="Endereço completo só aparece após confirmação mútua" />
       <ServiceCard selectedService={selectedService} />
 
       <section className="section-block">
@@ -971,7 +1019,7 @@ function AgreementScreen({ selectedService, onBack, onAgreementConfirmed }) {
           <div className="rating-summary-row">
             <div>
               <strong>{reviewsSummary?.totalAvaliacoes ? Number(reviewsSummary.notaMedia).toFixed(1) : "Novo perfil"}</strong>
-              <span>{reviewsSummary?.totalAvaliacoes ? `${reviewsSummary.totalAvaliacoes} avaliacoes liberadas` : "Ainda sem avaliacoes publicas liberadas"}</span>
+              <span>{reviewsSummary?.totalAvaliacoes ? `${reviewsSummary.totalAvaliacoes} avaliações liberadas` : "Ainda sem avaliações públicas liberadas"}</span>
             </div>
             <Star size={18} />
           </div>
@@ -1001,7 +1049,7 @@ function AgreementScreen({ selectedService, onBack, onAgreementConfirmed }) {
           <label className="toggle-row">
             <div>
               <strong>Prestador aceitou</strong>
-              <span>O profissional aceitou executar o servico nas condicoes combinadas.</span>
+              <span>O profissional aceitou executar o serviço nas condições combinadas.</span>
             </div>
             <input type="checkbox" checked={prestadorConfirmou} onChange={(event) => setPrestadorConfirmou(event.target.checked)} />
           </label>
@@ -1011,8 +1059,8 @@ function AgreementScreen({ selectedService, onBack, onAgreementConfirmed }) {
       <section className="agreement-note">
         <ShieldAlert size={18} />
         <p>
-          Enquanto uma das confirmacoes estiver pendente, a plataforma exibe apenas regiao aproximada. Rua, numero e
-          complemento ficam bloqueados ate a combinacao mutua.
+          Enquanto uma das confirmações estiver pendente, a plataforma exibe apenas a região aproximada. Rua, número e
+          complemento ficam bloqueados até a combinação mútua.
         </p>
       </section>
 
@@ -1024,7 +1072,7 @@ function AgreementScreen({ selectedService, onBack, onAgreementConfirmed }) {
         disabled={!canContinue}
         onClick={() => onAgreementConfirmed({ clienteConfirmou, prestadorConfirmou })}
       >
-        Liberar endereco e continuar
+        Liberar endereço e continuar
       </button>
     </main>
   );
@@ -1042,7 +1090,7 @@ function CheckoutScreen({ payment, setPayment, auth, onProjectCreated, onOpenCom
 
   const validarLocalizacao = async () => {
     if (!locationConsent) {
-      setStatus({ type: "error", message: "Autorize o uso de localizacao antes de validar sua posicao." });
+      setStatus({ type: "error", message: "Autorize o uso da localização antes de validar sua posição." });
       return;
     }
 
@@ -1098,7 +1146,7 @@ function CheckoutScreen({ payment, setPayment, auth, onProjectCreated, onOpenCom
 
   return (
     <main className="screen">
-      <AppHeader title="Checkout" subtitle="Confirme e pague com seguranca" />
+      <AppHeader title="Checkout" subtitle="Confirme e pague com segurança" />
       <SessionBanner auth={auth} onReset={auth?.logout} />
       <ServiceCard selectedService={selectedService} />
 
@@ -1125,7 +1173,7 @@ function CheckoutScreen({ payment, setPayment, auth, onProjectCreated, onOpenCom
             <strong>Isencao de Garantia</strong>
             <p>
               Ao pagar em dinheiro no local, a plataforma nao se responsabiliza por calotes, divergencia de troco ou
-              pela qualidade do servico executado fora do aplicativo. Confirmo que li e aceito o termo de renuncia.
+              pela qualidade do serviço executado fora do aplicativo. Confirmo que li e aceito o termo de renúncia.
             </p>
           </div>
         </section>
@@ -1133,9 +1181,9 @@ function CheckoutScreen({ payment, setPayment, auth, onProjectCreated, onOpenCom
         <label className="terms-panel">
           <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
           <span>
-            Estou ciente e de acordo com os <strong>Termos de Uso</strong>, <strong>Politica de Privacidade</strong> e
-            aceito o compartilhamento dos meus dados de localizacao estritamente para validacao da prestacao do servico
-            fisico.
+            Estou ciente e de acordo com os <strong>Termos de Uso</strong>, <strong>Política de Privacidade</strong> e
+            aceito o compartilhamento dos meus dados de localização estritamente para validação da prestação do serviço
+            físico.
           </span>
         </label>
       )}
@@ -1143,23 +1191,23 @@ function CheckoutScreen({ payment, setPayment, auth, onProjectCreated, onOpenCom
       <section className="privacy-panel compact">
         <Shield size={17} />
         <p>
-          A localizacao e usada apenas para validar a combinacao e a execucao fisica do servico, respeitando o aceite juridico ja registrado.
+          A localização é usada apenas para validar a combinação e a execução física do serviço, respeitando o aceite jurídico já registrado.
         </p>
       </section>
 
       <section className="settings-card">
         <label className="toggle-row">
           <div>
-            <strong>Permitir geolocalizacao operacional</strong>
-            <span>Necessaria para validar contratacao e conclusao do servico em ambiente real.</span>
+            <strong>Permitir geolocalização operacional</strong>
+            <span>Necessária para validar contratação e conclusão do serviço em ambiente real.</span>
           </div>
           <input type="checkbox" checked={locationConsent} onChange={(event) => setLocationConsent(event.target.checked)} />
         </label>
         <button className="secondary-action" disabled={loading} onClick={validarLocalizacao}>
-          {loading ? "Validando localizacao..." : locationProof ? "Atualizar localizacao" : "Validar localizacao atual"}
+          {loading ? "Validando localização..." : locationProof ? "Atualizar localização" : "Validar localização atual"}
         </button>
         <div className={`inline-result ${locationProof ? "success" : ""}`}>
-          {locationProof ? `Localizacao pronta: ${formatLocationLabel(locationProof)}` : "Nenhuma localizacao validada para este checkout."}
+          {locationProof ? `Localização pronta: ${formatLocationLabel(locationProof)}` : "Nenhuma localização validada para este checkout."}
         </div>
       </section>
 
@@ -1196,7 +1244,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
     try {
       const proof = await captureCurrentLocation();
       setLocationProof(proof);
-      setStatus({ type: "success", message: `Localizacao de conclusao validada com precisao aproximada de ${proof.accuracy || 0}m.` });
+      setStatus({ type: "success", message: `Localização de conclusão validada com precisão aproximada de ${proof.accuracy || 0}m.` });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {
@@ -1210,7 +1258,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
       return;
     }
     if (!locationProof) {
-      setStatus({ type: "error", message: "Valide a localizacao atual antes de concluir com token." });
+      setStatus({ type: "error", message: "Valide a localização atual antes de concluir com token." });
       return;
     }
 
@@ -1238,11 +1286,11 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
 
   const concluirComFoto = async () => {
     if (!canUseApi) {
-      setStatus({ type: "error", message: "Crie um projeto no checkout antes de concluir o servico." });
+      setStatus({ type: "error", message: "Crie um projeto no checkout antes de concluir o serviço." });
       return;
     }
     if (!locationProof) {
-      setStatus({ type: "error", message: "Valide a localizacao atual antes de concluir com foto." });
+      setStatus({ type: "error", message: "Valide a localização atual antes de concluir com foto." });
       return;
     }
 
@@ -1251,7 +1299,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
     try {
       const imagePayload = await captureServiceImage();
       if (!imagePayload?.base64) {
-        setStatus({ type: "error", message: "Captura cancelada. Escolha uma foto para concluir o servico." });
+        setStatus({ type: "error", message: "Captura cancelada. Escolha uma foto para concluir o serviço." });
         return;
       }
 
@@ -1280,12 +1328,12 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
 
   const enviarAvaliacao = async () => {
     if (!auth?.accessToken || !projetoAtual?.id) {
-      setStatus({ type: "error", message: "Finalize o projeto e mantenha a sessao ativa para avaliar." });
+      setStatus({ type: "error", message: "Finalize o projeto e mantenha a sessão ativa para avaliar." });
       return;
     }
 
     if (projetoAtual.status !== "FINALIZADO") {
-      setStatus({ type: "error", message: "A avaliacao cega so abre depois da finalizacao do servico." });
+      setStatus({ type: "error", message: "A avaliação cega só abre depois da finalização do serviço." });
       return;
     }
 
@@ -1306,9 +1354,9 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
         type: "success",
         message:
           response.cegaLiberada
-            ? "Avaliacao registrada e liberada pelo modo cego."
+            ? "Avaliação registrada e liberada pelo modo cego."
             : response.statusModeracao === "PENDENTE_REVISAO"
-              ? "Avaliacao registrada e enviada para moderacao."
+              ? "Avaliação registrada e enviada para moderação."
               : "Avaliacao registrada. Ela sera liberada publicamente quando o modo cego do projeto for concluido.",
       });
     } catch (error) {
@@ -1331,22 +1379,22 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
             <strong>{projetoAtual.tokenValidacao}</strong>
           </span>
         ) : (
-          <span>Finalize primeiro um checkout para liberar as acoes de conclusao.</span>
+          <span>Finalize primeiro um checkout para liberar as ações de conclusão.</span>
         )}
       </section>
 
       <section className="settings-card">
         <label className="toggle-row">
           <div>
-            <strong>Prova de localizacao</strong>
-            <span>Valide sua posicao atual antes de concluir o atendimento no app.</span>
+            <strong>Prova de localização</strong>
+            <span>Valide sua posição atual antes de concluir o atendimento no app.</span>
           </div>
           <button className="mini-button" onClick={validarLocalizacaoConclusao} disabled={loading}>
             {loading ? "..." : "Validar"}
           </button>
         </label>
         <div className={`inline-result ${locationProof ? "success" : ""}`}>
-          {locationProof ? `Conclusao validada em ${buildLocationProofLabel(locationProof)}` : "Localizacao ainda nao validada para esta conclusao."}
+          {locationProof ? `Conclusão validada em ${buildLocationProofLabel(locationProof)}` : "Localização ainda não validada para esta conclusão."}
         </div>
       </section>
 
@@ -1358,7 +1406,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
           </IconBox>
           <div>
             <strong>Token de Confirmacao</strong>
-            <small>Peca ao cliente o codigo de 4 digitos.</small>
+            <small>Peça ao cliente o código de 4 dígitos.</small>
           </div>
         </div>
         <input
@@ -1368,7 +1416,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
           value={token}
           onChange={(event) => setToken(event.target.value.replace(/\D/g, "").slice(0, 4))}
           placeholder="____"
-          aria-label="Token de confirmacao"
+          aria-label="Token de confirmação"
         />
         {tokenComplete ? (
           <div className="inline-success">
@@ -1387,7 +1435,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
         <span />
       </div>
 
-      <span className="option-label">Opcao B - Sem codigo</span>
+      <span className="option-label">Opção B - Sem código</span>
       <section className="completion-card">
         <div className="completion-heading">
           <IconBox>
@@ -1395,17 +1443,17 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
           </IconBox>
           <div>
             <strong>Concluir sem Codigo</strong>
-            <small>Envie uma foto do servico concluido.</small>
+            <small>Envie uma foto do serviço concluído.</small>
           </div>
         </div>
         <button className={`photo-drop ${photoSent ? "done" : ""}`} onClick={concluirComFoto} disabled={loading}>
           <Camera size={28} />
-          <strong>{photoSent ? "Foto enviada para analise" : "Tirar foto agora"}</strong>
-          <span>{photoSent ? "Cronometro de 48 horas iniciado" : "Enquadre a area onde o servico foi executado"}</span>
+          <strong>{photoSent ? "Foto enviada para análise" : "Tirar foto agora"}</strong>
+          <span>{photoSent ? "Cronômetro de 48 horas iniciado" : "Enquadre a área onde o serviço foi executado"}</span>
         </button>
         {photoPreview ? (
           <div className="photo-preview-card">
-            <img src={photoPreview} alt="Comprovacao do servico enviado" />
+            <img src={photoPreview} alt="Comprovação do serviço enviado" />
             <span>{photoSource || "Imagem pronta para envio"}</span>
           </div>
         ) : null}
@@ -1420,7 +1468,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
             <div className="rating-summary-row">
               <div>
                 <strong>{selectedService.professionalName}</strong>
-                <span>Envie sua nota sem expor a contraparte antes da liberacao do modo cego.</span>
+                <span>Envie sua nota sem expor a contraparte antes da liberação do modo cego.</span>
               </div>
               <Star size={18} />
             </div>
@@ -1459,7 +1507,7 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
               />
             </label>
             <button className="primary-action" disabled={reviewSent || loading} onClick={enviarAvaliacao}>
-              {reviewSent ? "Avaliacao enviada" : "Enviar avaliacao"}
+              {reviewSent ? "Avaliação enviada" : "Enviar avaliação"}
             </button>
           </section>
         </section>
@@ -1629,7 +1677,7 @@ function WalletScreen({ auth }) {
         <StatusMessage state={status} />
         <section className="wallet-rule-panel">
           <ShieldAlert size={17} />
-          Saques sao liberados a partir de {currency.format(Number(wallet?.valorMinimoSaque || 50))}. Debitos em dinheiro iguais ou
+          Saques são liberados a partir de {currency.format(Number(wallet?.valorMinimoSaque || 50))}. Débitos em dinheiro iguais ou
           acima de {currency.format(Number(wallet?.limiteDevedor || 50))} suspendem novos projetos.
         </section>
         <div className="movement-list">
@@ -1658,8 +1706,8 @@ function WalletScreen({ auth }) {
           ) : visibleMovements.length === 0 ? (
             <div className="empty-state">
               <Clock3 size={22} />
-              <strong>Sem movimentacoes</strong>
-              <span>A carteira ainda nao registrou operacoes para este usuario.</span>
+              <strong>Sem movimentações</strong>
+              <span>A carteira ainda não registrou operações para este usuário.</span>
             </div>
           ) : (
             visibleMovements.map((movement) => (
@@ -1730,7 +1778,7 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
 
   return (
     <main className="screen">
-      <AppHeader title="Perfil" subtitle="Dados pessoais e configuracoes do aplicativo" />
+      <AppHeader title="Perfil" subtitle="Dados pessoais e configurações do aplicativo" />
       <SessionBanner auth={auth} onReset={auth?.logout} />
 
       <section className="profile-card">
@@ -1744,7 +1792,7 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
           </button>
           <div className="profile-hero-copy">
             <strong>{draft.nomeExibicao || "Seu perfil"}</strong>
-            <span>{draft.categoriaPrincipal || "Prestador de servicos"}</span>
+            <span>{draft.categoriaPrincipal || "Prestador de serviços"}</span>
             <small>{loadingPhoto ? "Processando foto..." : "Toque na foto para alterar"}</small>
           </div>
         </div>
@@ -1762,7 +1810,7 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
             />
           </label>
           <label>
-            Descricao profissional
+            Descrição profissional
             <textarea
               className="multiline-input"
               value={draft.descricao}
@@ -1774,11 +1822,11 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
       </section>
 
       <section className="section-block">
-        <h3>Configuracoes comuns</h3>
+        <h3>Configurações comuns</h3>
         <section className="settings-card">
           <label className="toggle-row">
             <div>
-              <strong>Notificacoes push</strong>
+              <strong>Notificações push</strong>
               <span>Novos pedidos, atualizacoes e alertas importantes.</span>
             </div>
             <input
@@ -1789,8 +1837,8 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
           </label>
           <label className="toggle-row">
             <div>
-              <strong>Notificacoes por email</strong>
-              <span>Resumo de movimentacoes e confirmacoes da conta.</span>
+              <strong>Notificações por e-mail</strong>
+              <span>Resumo de movimentações e confirmações da conta.</span>
             </div>
             <input
               type="checkbox"
@@ -1828,15 +1876,19 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
         <section className="settings-card">
           <div className="settings-row">
             <strong>Conta ativa</strong>
-            <span>{auth?.nomeExibicao || auth?.email || "Nao autenticado"}</span>
+            <span>{auth?.nomeExibicao || auth?.email || "Não autenticado"}</span>
           </div>
           <div className="settings-row">
-            <strong>Versao do app</strong>
+            <strong>Status cadastral</strong>
+            <span>{formatVerificationStatus(auth?.statusVerificacaoCadastral)}</span>
+          </div>
+          <div className="settings-row">
+            <strong>Versão do app</strong>
             <span>{APP_VERSION}</span>
           </div>
           <div className="settings-row">
             <strong>Compatibilidade</strong>
-            <span>{versaoStatus?.message || "Validacao pendente"}</span>
+            <span>{versaoStatus?.message || "Validação pendente"}</span>
           </div>
           <div className="settings-row">
             <strong>Termos aceitos</strong>
@@ -1844,7 +1896,7 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
           </div>
           <div className="settings-row">
             <strong>Foto de perfil</strong>
-            <span>Salvamos apenas uma versao compactada para evitar arquivos pesados.</span>
+            <span>Salvamos apenas uma versão compactada para evitar arquivos pesados.</span>
           </div>
         </section>
       </section>
@@ -1857,36 +1909,85 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
   );
 }
 
-function OnboardingScreen({ onAuthenticated }) {
-  const [documento, setDocumento] = useState("52998224725");
+function AuthScreen({ onAuthenticated, sessionNotice }) {
+  const [mode, setMode] = useState("login");
+  const [loginExpanded, setLoginExpanded] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [loginDraft, setLoginDraft] = useState({ email: DEMO_LOGIN_EMAIL, senha: "" });
+  const [registerDraft, setRegisterDraft] = useState({
+    nomeExibicao: "Rafael Souza",
+    email: `rafael.secure.${Date.now()}@example.com`,
+    senha: "SenhaForte123",
+    documento: "52998224725",
+    telefone: "11988887777",
+    tipoUsuario: "FREELANCER",
+  });
   const [otpSent, setOtpSent] = useState(null);
+  const [otpDraft, setOtpDraft] = useState({ codigoEmail: "", codigoTelefone: "" });
   const [verified, setVerified] = useState(false);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [credentials] = useState(() => ({
-    email: `rafael.secure.${Date.now()}@example.com`,
-    senha: "SenhaForte123",
-  }));
-  const documentReady = documento.replace(/\D/g, "").length >= 11;
+  const documentReady = registerDraft.documento.replace(/\D/g, "").length >= 11;
+
+  useEffect(() => {
+    if (sessionNotice) {
+      setStatus({ type: "warning", message: sessionNotice });
+    }
+  }, [sessionNotice]);
+
+  const openLogin = () => {
+    setMode("login");
+    setLoginExpanded(true);
+    setStatus(null);
+  };
+
+  const openRegister = () => {
+    setMode("register");
+    setLoginExpanded(false);
+    setStatus(null);
+  };
 
   const register = async () => {
     setLoading(true);
     setStatus(null);
     try {
       const response = await api.cadastrar({
-        email: credentials.email,
-        nomeExibicao: "Rafael Souza",
-        senha: credentials.senha,
-        documento,
-        telefone: "11988887777",
-        tipoUsuario: "FREELANCER",
+        email: registerDraft.email,
+        nomeExibicao: registerDraft.nomeExibicao,
+        senha: registerDraft.senha,
+        documento: registerDraft.documento,
+        telefone: registerDraft.telefone,
+        tipoUsuario: registerDraft.tipoUsuario,
         turnstileToken: "sandbox-token",
         aceiteTermos: accepted,
         ipOrigem: "127.0.0.1",
       });
       setOtpSent(response);
-      setStatus({ type: "success", message: "Cadastro criado em sandbox. Codigos OTP recebidos pelos canais simulados." });
+      setOtpDraft({
+        codigoEmail: response.canalEmailSandbox || "",
+        codigoTelefone: response.canalTelefoneSandbox || "",
+      });
+      setStatus({
+        type: "success",
+        message: response.otpSandboxDisponivel
+          ? "Cadastro criado em sandbox. Os códigos retornaram apenas para este ambiente de teste."
+          : "Cadastro criado. Digite os códigos recebidos nos canais mascarados para concluir o OTP.",
+      });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithCredentials = async () => {
+    setLoading(true);
+    setStatus(null);
+    try {
+      const login = await api.login(loginDraft);
+      const authSession = await hydrateAuthSession(login, { email: loginDraft.email });
+      onAuthenticated(authSession);
+      setStatus({ type: "success", message: "Sessao restaurada com sucesso neste dispositivo." });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {
@@ -1900,13 +2001,23 @@ function OnboardingScreen({ onAuthenticated }) {
     setStatus(null);
     try {
       await api.verificarOtp(otpSent.usuarioId, {
-        codigoEmail: otpSent.canalEmailSandbox,
-        codigoTelefone: otpSent.canalTelefoneSandbox,
+        codigoEmail: otpDraft.codigoEmail,
+        codigoTelefone: otpDraft.codigoTelefone,
       });
-      const login = await api.login(credentials);
-      onAuthenticated(login);
+      const login = await api.login({
+        email: registerDraft.email,
+        senha: registerDraft.senha,
+      });
+      const authSession = await hydrateAuthSession(login, {
+        nomeExibicao: registerDraft.nomeExibicao,
+        email: registerDraft.email,
+      });
+      onAuthenticated(authSession);
       setVerified(true);
-      setStatus({ type: "success", message: "Conta ativada e token JWT recebido em memoria." });
+      setStatus({
+        type: "success",
+        message: "Conta autenticada. O acesso básico foi liberado e o cadastro ficou sinalizado para análise KYC/KYB.",
+      });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {
@@ -1915,89 +2026,200 @@ function OnboardingScreen({ onAuthenticated }) {
   };
 
   return (
-    <main className="screen">
-      <AppHeader title="Cadastro Seguro" subtitle="KYC, OTP e aceite juridico" />
+    <main className="screen auth-screen">
+      <section className="auth-shell">
+        <header className="auth-hero">
+          <div className="auth-hero-mark">{mode === "register" ? <UserPlus size={20} /> : <KeyRound size={20} />}</div>
+          <h1>Entrar</h1>
+          <p>{mode === "login" ? "Acesso seguro com sessão lembrada neste dispositivo." : "Crie sua conta com validação inicial antes de liberar recursos sensíveis."}</p>
+        </header>
 
-      <section className="kyc-card">
-        <div className="completion-heading">
-          <IconBox>
-            <UserPlus size={21} />
-          </IconBox>
-          <div>
-            <strong>Dados do prestador</strong>
-            <small>Validacao local antes de consultar gateways externos.</small>
-          </div>
-        </div>
+        {mode === "login" && !loginExpanded ? (
+            <section className="auth-entry-card">
+            <button className="primary-action auth-main-button" onClick={openLogin}>
+              Login
+            </button>
+            <button className="text-link-button auth-secondary-link" onClick={openRegister}>
+              Ainda não tem cadastro? Criar conta
+            </button>
+            {DEMO_LOGIN_EMAIL ? <div className="auth-helper-note">Acesso demo controlado disponível neste ambiente.</div> : null}
+          </section>
+        ) : (
+          <>
+            {mode === "register" ? (
+              <button className="text-link-button auth-back-link" onClick={openLogin}>
+                Já tenho conta
+              </button>
+            ) : (
+              <button className="text-link-button auth-back-link" onClick={() => setLoginExpanded(false)}>
+                Voltar
+              </button>
+            )}
 
-        <div className="form-stack">
-          <label>
-            Nome
-            <input value="Rafael Souza" readOnly />
-          </label>
-          <label>
-            CPF ou CNPJ
-            <input value={documento} onChange={(event) => setDocumento(event.target.value)} />
-          </label>
-          <label>
-            Telefone
-            <input value="11988887777" readOnly />
-          </label>
-        </div>
+            <section className="kyc-card auth-card">
+              <div className="completion-heading auth-card-heading">
+                <IconBox>{mode === "login" ? <KeyRound size={21} /> : <UserPlus size={21} />}</IconBox>
+                <div>
+                  <strong>{mode === "login" ? "Acesso do usuário" : "Cadastro do prestador"}</strong>
+                  <small>{mode === "login" ? "Informe seus dados para continuar." : "Seus dados ficam protegidos e passam por validação inicial."}</small>
+                </div>
+              </div>
 
-        <div className={`validation-row ${documentReady ? "ok" : ""}`}>
-          <FileCheck size={18} />
-          <span>{documentReady ? "Documento com formato pronto para validacao" : "Informe CPF ou CNPJ valido"}</span>
-        </div>
-      </section>
+              {mode === "login" ? (
+                <div className="form-stack auth-form-stack">
+                  <label>
+                    E-mail
+                    <input value={loginDraft.email} onChange={(event) => setLoginDraft((current) => ({ ...current, email: event.target.value.trim() }))} />
+                  </label>
+                  <label>
+                    Senha
+                    <input type="password" value={loginDraft.senha} onChange={(event) => setLoginDraft((current) => ({ ...current, senha: event.target.value }))} />
+                  </label>
+                </div>
+              ) : (
+                <>
+                  <div className="form-stack auth-form-stack">
+                    <label>
+                      Nome
+                      <input
+                        value={registerDraft.nomeExibicao}
+                        onChange={(event) => setRegisterDraft((current) => ({ ...current, nomeExibicao: event.target.value.slice(0, 60) }))}
+                      />
+                    </label>
+                    <label>
+                      E-mail
+                      <input
+                        value={registerDraft.email}
+                        onChange={(event) => setRegisterDraft((current) => ({ ...current, email: event.target.value.trim() }))}
+                      />
+                    </label>
+                    <label>
+                      Senha
+                      <input
+                        type="password"
+                        value={registerDraft.senha}
+                        onChange={(event) => setRegisterDraft((current) => ({ ...current, senha: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      CPF ou CNPJ
+                      <input
+                        value={registerDraft.documento}
+                        onChange={(event) => setRegisterDraft((current) => ({ ...current, documento: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Telefone
+                      <input
+                        value={registerDraft.telefone}
+                        onChange={(event) => setRegisterDraft((current) => ({ ...current, telefone: event.target.value }))}
+                      />
+                    </label>
+                  </div>
 
-      <label className="terms-panel">
-        <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
-        <span>
-          Li os Termos de Uso e a Politica de Privacidade. O aceite gera trilha de auditoria com IP, data do servidor e
-          hash SHA-256 da versao juridica vigente.
-        </span>
-      </label>
+                  <div className={`validation-row ${documentReady ? "ok" : ""}`}>
+                    <FileCheck size={18} />
+                    <span>{documentReady ? "Documento com formato pronto para validação" : "Informe CPF ou CNPJ válido"}</span>
+                  </div>
+                </>
+              )}
+            </section>
 
-      <button className="primary-action" disabled={!documentReady || !accepted || loading} onClick={register}>
-        {loading ? "Validando..." : "Gerar OTP de duplo canal"}
-      </button>
+            {mode === "register" ? (
+              <label className="terms-panel auth-terms-panel">
+                <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+                <span>
+                  Li os Termos de Uso e a Política de Privacidade. O aceite gera trilha de auditoria com IP, data do servidor e
+                  hash SHA-256 da versão jurídica vigente.
+                </span>
+              </label>
+            ) : null}
 
-      {otpSent ? (
+            {mode === "login" ? (
+              <>
+                <button className="primary-action auth-main-button" disabled={!loginDraft.email || !loginDraft.senha || loading} onClick={loginWithCredentials}>
+                  {loading ? "Entrando..." : "Entrar"}
+                </button>
+                {DEMO_LOGIN_EMAIL ? (
+                  <div className="auth-helper-note">
+                    Acesso demo: <strong>{DEMO_LOGIN_EMAIL}</strong>
+                  </div>
+                ) : null}
+                <button className="text-link-button auth-secondary-link" onClick={openRegister}>
+                  Ainda não tem cadastro? Criar conta
+                </button>
+              </>
+            ) : (
+              <button className="primary-action auth-main-button" disabled={!documentReady || !accepted || loading} onClick={register}>
+                {loading ? "Validando..." : "Continuar cadastro"}
+              </button>
+            )}
+          </>
+        )}
+
+        {mode === "register" && otpSent ? (
         <section className="otp-panel">
           <div>
             <Mail size={18} />
             <strong>Email</strong>
-            <span>{otpSent.canalEmailSandbox}</span>
+            <span>{otpSent.emailDestinoMascarado}</span>
+            {otpSent.otpSandboxDisponivel ? <small>Código visível apenas no sandbox</small> : <small>Digite o código recebido</small>}
           </div>
           <div>
             <Smartphone size={18} />
             <strong>Telefone</strong>
-            <span>{otpSent.canalTelefoneSandbox}</span>
+            <span>{otpSent.telefoneDestinoMascarado}</span>
+            {otpSent.otpSandboxDisponivel ? <small>Código visível apenas no sandbox</small> : <small>Digite o código recebido</small>}
+          </div>
+          <label className="otp-input-card">
+            Codigo do email
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              value={otpDraft.codigoEmail}
+              onChange={(event) => setOtpDraft((current) => ({ ...current, codigoEmail: event.target.value.replace(/\D/g, "").slice(0, 6) }))}
+            />
+          </label>
+          <label className="otp-input-card">
+            Codigo do telefone
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              value={otpDraft.codigoTelefone}
+              onChange={(event) => setOtpDraft((current) => ({ ...current, codigoTelefone: event.target.value.replace(/\D/g, "").slice(0, 6) }))}
+            />
+          </label>
+          <div className="otp-status-card">
+            <strong>Modo OTP</strong>
+            <span>{otpSent.modoOtp === "sandbox" ? "Sandbox controlado" : "Entrega externa"}</span>
+            <small>Expira em {otpSent.otpExpiraEm ? formatAcceptedDate(otpSent.otpExpiraEm) : "breve"}</small>
           </div>
           <button onClick={validateOtpAndLogin} disabled={loading}>
             <CheckCircle2 size={18} />
-            Validar codigos
+            Validar códigos
           </button>
         </section>
-      ) : null}
+        ) : null}
 
-      <StatusMessage state={status} />
+        <StatusMessage state={status} />
 
-      {verified ? (
-        <section className="inline-result success">
-          <Check size={17} />
-          Conta ativada. Status alterado para ATIVO apos OTP de email e telefone.
-        </section>
-      ) : null}
+        {verified ? (
+          <section className="inline-result success">
+            <Check size={17} />
+            Conta autenticada. OTP validado e cadastro encaminhado para análise KYC/KYB antes da liberação total de operações sensíveis.
+          </section>
+        ) : null}
+      </section>
     </main>
   );
 }
 
 function HomeScreen({
+  auth,
   setPayment,
   onSelectProfessional,
   onOpenQuotes,
-  onOpenOnboarding,
+  onOpenProfile,
   categorias,
   categoriasLoading,
   categoriasStatus,
@@ -2060,10 +2282,32 @@ function HomeScreen({
         </div>
       </header>
 
+      <section className="home-intro-card">
+        <div className="home-intro-copy">
+          <strong>Encontre um profissional ou publique seu pedido</strong>
+          <span>Comece pela busca ou abra uma solicitação para receber orçamentos.</span>
+        </div>
+        <div className="home-intro-actions">
+          <button className="primary-action compact-action" onClick={onOpenQuotes}>
+            Pedir orçamentos
+          </button>
+          <button className="secondary-action compact-action" onClick={onOpenProfile}>
+            Ver perfil
+          </button>
+        </div>
+      </section>
+
+      {auth?.contaDemo ? (
+        <section className="inline-result">
+          <ShieldAlert size={16} />
+          Conta demo ativa. A navegação permanece liberada, mas ações financeiras e operações sensíveis ficam bloqueadas.
+        </section>
+      ) : null}
+
       <label className="search-box">
         <Search size={19} />
         <input
-          placeholder="Buscar servico ou profissional"
+          placeholder="Buscar serviço ou profissional"
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
         />
@@ -2077,29 +2321,9 @@ function HomeScreen({
         ))}
       </div>
 
-      <button className="kyc-shortcut" onClick={onOpenOnboarding}>
-        <IconBox>
-          <Shield size={20} />
-        </IconBox>
-        <span>
-          <strong>Cadastro com KYC/KYB</strong>
-          <small>Validacao anti-bot, documento e OTP de dois canais</small>
-        </span>
-      </button>
-
-      <button className="kyc-shortcut" onClick={onOpenQuotes}>
-        <IconBox>
-          <FileText size={20} />
-        </IconBox>
-        <span>
-          <strong>Pedido aberto a orcamentos</strong>
-          <small>Publique a necessidade e receba propostas antes de fechar o servico.</small>
-        </span>
-      </button>
-
       <section className="info-section">
-        <h2>Categorias reais da plataforma</h2>
-        <p>Busque por categoria ou subcategoria usando os dados carregados da API.</p>
+        <h2>Categorias</h2>
+        <p>Escolha uma área para refinar a busca.</p>
         <StatusMessage state={categoriasStatus} />
         <div className="category-results">
           {categoriasLoading ? (
@@ -2123,15 +2347,20 @@ function HomeScreen({
       </section>
 
       <section className="info-section">
-        <h2>Profissionais disponiveis</h2>
-        <p>Selecione um servico real do catalogo publico para seguir ao checkout.</p>
+        <div className="section-title-row">
+          <div>
+            <h2>Profissionais disponiveis</h2>
+            <p>Selecione um serviço para seguir com negociação e confirmação.</p>
+          </div>
+          <span className="section-count">{visibleProfessionals.length}</span>
+        </div>
         <StatusMessage state={profissionaisStatus} />
         <div className="professional-results">
           {profissionaisLoading ? (
             <div className="empty-state compact-state">
               <Clock3 size={20} />
               <strong>Carregando vitrine</strong>
-              <span>Buscando profissionais publicos da API.</span>
+              <span>Buscando profissionais públicos da API.</span>
             </div>
           ) : visibleProfessionals.length === 0 ? (
             <div className="empty-state compact-state">
@@ -2147,24 +2376,20 @@ function HomeScreen({
         </div>
       </section>
 
-      <section className="info-section">
-        <h2>Como funciona o pagamento</h2>
-        <p>Escolha a forma que preferir na hora de contratar.</p>
-        <div className="home-payment-list">
+      <section className="home-summary-card">
+        <div className="home-summary-head">
+          <Shield size={18} />
+          <strong>Pagamento e segurança</strong>
+        </div>
+        <p>Cartao e Pix mantem garantia total. Dinheiro no local continua disponivel, com regras operacionais mostradas no checkout.</p>
+        <div className="home-payment-chips">
           {paymentMethods.map((method) => (
-            <PaymentMethod key={method.id} method={method} compact onSelect={() => setPayment(method.id)} />
+            <button key={method.id} className="payment-chip" onClick={() => setPayment(method.id)}>
+              {method.title}
+            </button>
           ))}
         </div>
       </section>
-
-      <section className="notice-panel">
-        <ShieldAlert size={20} />
-        <p>
-          <strong>Aviso:</strong> ao optar por dinheiro no local, a plataforma cobra uma pequena taxa de servico do
-          profissional. Debitos acima de R$ 50,00 suspendem a conta.
-        </p>
-      </section>
-
     </main>
   );
 }
@@ -2217,14 +2442,16 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [versaoStatus, setVersaoStatus] = useState({ type: "", message: "Validando compatibilidade do app com a API." });
   const [showVersionModal, setShowVersionModal] = useState(false);
+  const [dismissedVersionNotice, setDismissedVersionNotice] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [legalCheckbox, setLegalCheckbox] = useState(false);
   const [legalAcceptedAt, setLegalAcceptedAt] = useState(null);
   const [profileSettings, setProfileSettings] = useState({
     nomeExibicao: "Rafael Souza",
     categoriaPrincipal: "Eletricista Profissional",
-    descricao: "Atendimento residencial com foco em instalacoes, reparos e finalizacao segura do servico.",
+    descricao: "Atendimento residencial com foco em instalações, reparos e finalização segura do serviço.",
     notificacoesPush: true,
     notificacoesEmail: true,
     modoSilencioso: false,
@@ -2234,12 +2461,12 @@ export default function App() {
   });
   const [selectedService, setSelectedService] = useState({
     title: serviceOrder.title,
-    description: "Instalar chuveiro 220V com validacao de garantia e seguranca operacional.",
+    description: "Instalar chuveiro 220V com validação de garantia e segurança operacional.",
     date: serviceOrder.date,
     time: serviceOrder.time,
     location: serviceOrder.location,
     neighborhood: serviceOrder.neighborhood,
-    fullLocation: "Rua validada e liberada apos confirmacao mutua.",
+    fullLocation: "Rua validada e liberada após confirmação mútua.",
     addressReleased: false,
     clienteConfirmou: false,
     prestadorConfirmou: false,
@@ -2268,7 +2495,14 @@ export default function App() {
 
         setActiveScreen(session.activeScreen || "home");
         setPayment(session.payment || "CARTAO");
-        setAuth(session.auth || null);
+        if (isAuthSessionValid(session.auth)) {
+          setAuth(session.auth || null);
+        } else {
+          setAuth(null);
+          if (session.auth) {
+            setAuthNotice("Sua sessão salva expirou. Entre novamente para continuar com segurança.");
+          }
+        }
         setProjetoAtual(session.projetoAtual || null);
         setSelectedService((current) => ({
           ...current,
@@ -2293,6 +2527,7 @@ export default function App() {
         }));
         setLegalAccepted(session.legalConsent?.version === LEGAL_VERSION);
         setLegalAcceptedAt(session.legalConsent?.version === LEGAL_VERSION ? session.legalConsent.acceptedAt : null);
+        setDismissedVersionNotice(session.versionNotice?.dismissedForVersion || "");
       })
       .finally(() => {
         if (active) {
@@ -2323,6 +2558,9 @@ export default function App() {
       },
       negotiationFlow,
       profileSettings,
+      versionNotice: {
+        dismissedForVersion: dismissedVersionNotice,
+      },
       legalConsent: legalAccepted
         ? {
             acceptedAt: legalAcceptedAt || new Date().toISOString(),
@@ -2330,7 +2568,7 @@ export default function App() {
           }
         : null,
     });
-  }, [activeScreen, auth, legalAccepted, legalAcceptedAt, negotiationFlow, payment, profileSettings, projetoAtual, quoteFlow, selectedService, sessionReady]);
+  }, [activeScreen, auth, dismissedVersionNotice, legalAccepted, legalAcceptedAt, negotiationFlow, payment, profileSettings, projetoAtual, quoteFlow, selectedService, sessionReady]);
 
   useEffect(() => {
     let active = true;
@@ -2352,7 +2590,7 @@ export default function App() {
         }
 
         setCategorias([]);
-        setCategoriasStatus({ type: "error", message: `Nao foi possivel carregar categorias reais: ${error.message}` });
+        setCategoriasStatus({ type: "error", message: `Não foi possível carregar categorias reais: ${error.message}` });
       })
       .finally(() => {
         if (active) {
@@ -2385,7 +2623,7 @@ export default function App() {
         }
 
         setProfissionais([]);
-        setProfissionaisStatus({ type: "error", message: `Nao foi possivel carregar a vitrine: ${error.message}` });
+        setProfissionaisStatus({ type: "error", message: `Não foi possível carregar a vitrine: ${error.message}` });
       })
       .finally(() => {
         if (active) {
@@ -2413,9 +2651,11 @@ export default function App() {
 
         setVersaoStatus({
           type: response.compativel ? "success" : "warning",
-          message: `${response.mensagem}. Instalada ${APP_VERSION} | minima ${response.versaoMinima}.`,
+          message: `${response.mensagem}. Instalada ${APP_VERSION} | mínima ${response.versaoMinima}.`,
         });
-        setShowVersionModal(true);
+        if (dismissedVersionNotice !== APP_VERSION) {
+          setShowVersionModal(true);
+        }
       })
       .catch((error) => {
         if (!active) {
@@ -2424,18 +2664,26 @@ export default function App() {
 
         setVersaoStatus({
           type: "error",
-          message: `Nao foi possivel validar a versao do app: ${error.message}`,
+          message: `Não foi possível validar a versão do app: ${error.message}`,
         });
-        setShowVersionModal(true);
+        if (dismissedVersionNotice !== APP_VERSION) {
+          setShowVersionModal(true);
+        }
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [dismissedVersionNotice]);
+
+  const closeVersionModal = () => {
+    setDismissedVersionNotice(APP_VERSION);
+    setShowVersionModal(false);
+  };
 
   const resetSession = async () => {
     setAuth(null);
+    setAuthNotice("");
     setProjetoAtual(null);
     setActiveScreen("home");
     setPayment("CARTAO");
@@ -2462,7 +2710,7 @@ export default function App() {
       date: serviceOrder.date,
       time: serviceOrder.time,
       location: `Regiao aproximada: ${item.bairro} - ${item.cidade}`,
-      fullLocation: `Endereco completo em ${item.bairro} - ${item.cidade}, liberado somente apos confirmacao mutua.`,
+      fullLocation: `Endereço completo em ${item.bairro} - ${item.cidade}, liberado somente após confirmação mútua.`,
       neighborhood: `${item.cidade} - ${item.bairro}`,
       addressReleased: false,
       clienteConfirmou: false,
@@ -2490,7 +2738,7 @@ export default function App() {
       date: serviceOrder.date,
       time: serviceOrder.time,
       location: `Regiao aproximada: ${accepted.bairro} - ${accepted.cidade}`,
-      fullLocation: `Endereco completo em ${accepted.bairro} - ${accepted.cidade}, liberado somente apos confirmacao mutua.`,
+      fullLocation: `Endereço completo em ${accepted.bairro} - ${accepted.cidade}, liberado somente após confirmação mútua.`,
       neighborhood: `${accepted.cidade} - ${accepted.bairro}`,
       addressReleased: false,
       clienteConfirmou: false,
@@ -2549,7 +2797,7 @@ export default function App() {
             <div className="empty-state">
               <Clock3 size={22} />
               <strong>Preparando aplicativo</strong>
-              <span>Restaurando sua sessao de teste com seguranca.</span>
+              <span>Restaurando sua sessão de teste com segurança.</span>
             </div>
           </main>
         </div>
@@ -2560,12 +2808,23 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="phone-frame">
-        {activeScreen === "home" ? (
+        {!auth ? (
+          <AuthScreen
+            sessionNotice={authNotice}
+            onAuthenticated={(session) => {
+              setAuth(session);
+              setAuthNotice("");
+              setActiveScreen("home");
+            }}
+          />
+        ) : null}
+        {auth && activeScreen === "home" ? (
           <HomeScreen
+            auth={authWithActions}
             setPayment={selectPayment}
             onSelectProfessional={selectProfessional}
             onOpenQuotes={() => setActiveScreen("quotes")}
-            onOpenOnboarding={() => setActiveScreen("onboarding")}
+            onOpenProfile={() => setActiveScreen("profile")}
             categorias={categorias}
             categoriasLoading={categoriasLoading}
             categoriasStatus={categoriasStatus}
@@ -2578,11 +2837,10 @@ export default function App() {
             setSelectedCategory={setSelectedCategory}
           />
         ) : null}
-        {activeScreen === "onboarding" ? <OnboardingScreen onAuthenticated={setAuth} /> : null}
-        {activeScreen === "quotes" ? (
+        {auth && activeScreen === "quotes" ? (
           <QuoteRequestScreen categorias={categorias} quoteFlow={quoteFlow} setQuoteFlow={setQuoteFlow} onAcceptProposal={acceptQuoteProposal} />
         ) : null}
-        {activeScreen === "negotiation" ? (
+        {auth && activeScreen === "negotiation" ? (
           <NegotiationScreen
             selectedService={selectedService}
             negotiationFlow={negotiationFlow}
@@ -2591,14 +2849,14 @@ export default function App() {
             onContinue={() => setActiveScreen("agreement")}
           />
         ) : null}
-        {activeScreen === "agreement" ? (
+        {auth && activeScreen === "agreement" ? (
           <AgreementScreen
             selectedService={selectedService}
             onBack={() => setActiveScreen("negotiation")}
             onAgreementConfirmed={confirmAgreement}
           />
         ) : null}
-        {activeScreen === "checkout" ? (
+        {auth && activeScreen === "checkout" ? (
           <CheckoutScreen
             payment={payment}
             setPayment={setPayment}
@@ -2608,13 +2866,13 @@ export default function App() {
             selectedService={selectedService}
           />
         ) : null}
-        {activeScreen === "complete" ? (
+        {auth && activeScreen === "complete" ? (
           <CompleteScreen auth={authWithActions} projetoAtual={projetoAtual} onProjectUpdated={setProjetoAtual} selectedService={selectedService} />
         ) : null}
-        {activeScreen === "wallet" ? (
+        {auth && activeScreen === "wallet" ? (
           <WalletScreen auth={authWithActions} />
         ) : null}
-        {activeScreen === "profile" ? (
+        {auth && activeScreen === "profile" ? (
           <ProfileScreen
             auth={authWithActions}
             profileSettings={profileSettings}
@@ -2623,12 +2881,12 @@ export default function App() {
             legalAcceptedAt={legalAcceptedAt}
           />
         ) : null}
-        <BottomNav active={activeScreen} onChange={setActiveScreen} />
-        {!legalAccepted ? (
+        {auth ? <BottomNav active={activeScreen} onChange={setActiveScreen} /> : null}
+        {auth && !legalAccepted ? (
           <LegalConsentModal accepted={legalCheckbox} setAccepted={setLegalCheckbox} onAccept={acceptLegalTerms} />
         ) : null}
-        {legalAccepted && showVersionModal ? (
-          <VersionNoticeModal status={versaoStatus} onClose={() => setShowVersionModal(false)} />
+        {auth && legalAccepted && showVersionModal ? (
+          <VersionNoticeModal status={versaoStatus} onClose={closeVersionModal} />
         ) : null}
       </div>
     </div>

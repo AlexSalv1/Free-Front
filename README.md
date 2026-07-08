@@ -19,6 +19,7 @@ Crie `.env` a partir de `.env.example`.
 - `VITE_APP_VERSION`: versao visual exibida no app
 - `VITE_LEGAL_VERSION`: versao juridica usada no aceite
 - `VITE_ENABLE_OFFLINE_FALLBACK`: permite fallback local apenas em ambiente de teste
+- `VITE_DEMO_LOGIN_EMAIL`: e-mail demo sugerido na tela de login, quando existir
 
 Para publicacao, o ideal e usar:
 
@@ -31,7 +32,7 @@ Assim, uma falha da API nao vira uma conversa de teste no aparelho sem persisten
 ## Fluxos ja implementados
 
 - Home com busca, categorias e explicacao dos meios de pagamento
-- Cadastro com aceite juridico, OTP sandbox e login
+- Cadastro com aceite juridico, OTP de duplo canal e status cadastral
 - Pedido aberto a orcamentos
 - Aceite de proposta
 - Negociacao protegida antes da liberacao do endereco completo
@@ -42,6 +43,19 @@ Assim, uma falha da API nao vira uma conversa de teste no aparelho sem persisten
 - Carteira do prestador
 - Perfil com foto compactada, descricao e configuracoes
 - Aviso de versao ao abrir o app
+
+No onboarding, o app ja trata dois cenarios:
+
+- `sandbox`: os codigos OTP podem voltar na resposta para teste
+- `provider-ready`: o usuario digita manualmente os codigos recebidos nos canais mascarados
+
+## Conta demo
+
+Se o ambiente expuser uma conta demo controlada, a tela de login pode vir pre-preenchida via:
+
+- `VITE_DEMO_LOGIN_EMAIL`
+
+Nao deixe senha demo ou credenciais completas hardcoded no front para producao.
 
 ## Teste web
 

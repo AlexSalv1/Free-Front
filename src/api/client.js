@@ -84,6 +84,7 @@ export const api = {
   verificarOtp: (usuarioId, payload) =>
     apiRequest(`/api/v1/auth/usuarios/${usuarioId}/verificar-otp`, { method: "POST", body: payload }),
   login: (payload) => apiRequest("/api/v1/auth/login", { method: "POST", body: payload }),
+  buscarUsuario: (usuarioId, token) => apiRequest(`/api/v1/auth/usuarios/${usuarioId}`, { token }),
   criarCheckout: (payload, token) =>
     apiRequest("/api/v1/projetos/checkout", { method: "POST", body: payload, token }),
   confirmarToken: (projetoId, payload, token) =>

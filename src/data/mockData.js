@@ -1,4 +1,4 @@
-export const professional = {
+﻿export const professional = {
   name: "Rafael Souza",
   role: "Eletricista Profissional",
   verified: true,
@@ -6,25 +6,25 @@ export const professional = {
 };
 
 export const serviceOrder = {
-  title: "Instalacao de Chuveiro Eletrico",
+  title: "Instalação de Chuveiro Elétrico",
   date: "Sex, 15/05",
   time: "14:00",
-  location: "Regiao aproximada: Vila Mariana - Sao Paulo",
-  neighborhood: "Sao Paulo - Vila Mariana",
+  location: "Região aproximada: Vila Mariana - São Paulo",
+  neighborhood: "São Paulo - Vila Mariana",
   value: 180,
 };
 
 export const paymentMethods = [
   {
     id: "CARTAO",
-    title: "Cartao de Credito",
-    description: "Cobranca imediata - garantia total",
+    title: "Cartão de Crédito",
+    description: "Cobrança imediata - garantia total",
     badge: "Garantia total",
   },
   {
     id: "PIX_APP",
     title: "Pix no App",
-    description: "Aprovacao instantanea - garantia total",
+    description: "Aprovação instantânea - garantia total",
     badge: "Garantia total",
   },
   {
@@ -38,14 +38,14 @@ export const paymentMethods = [
 export const movements = [
   {
     id: 1,
-    title: "Instalacao chuveiro - Marina L.",
+    title: "Instalação de chuveiro - Marina L.",
     date: "Hoje - 09:12",
     amount: 180,
     type: "credit",
   },
   {
     id: 2,
-    title: "Taxa servico em dinheiro - Ana P.",
+    title: "Taxa de serviço em dinheiro - Ana P.",
     date: "Ontem - 18:30",
     amount: -16.5,
     type: "debit",
@@ -59,7 +59,7 @@ export const movements = [
   },
   {
     id: 4,
-    title: "Taxa servico em dinheiro - Beatriz R.",
+    title: "Taxa de serviço em dinheiro - Beatriz R.",
     date: "10/05 - 11:20",
     amount: -22,
     type: "debit",

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -28,7 +28,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { api } from "./api/client.js";
-import { movements, paymentMethods, professional, serviceOrder } from "./data/mockData.js";
+import { paymentMethods, professional, serviceOrder } from "./data/mockData.js";
 
 const currency = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -380,18 +380,104 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated }) {
   );
 }
 
-function WalletScreen() {
+function WalletScreen({ auth }) {
   const [filter, setFilter] = useState("positive");
-  const wallet = {
-    balance: 1247.85,
-    debt: 38.5,
-    debtLimit: 50,
-    minimumWithdraw: 50,
-  };
+  const [wallet, setWallet] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!auth?.usuarioId || !auth?.accessToken) {
+      setWallet(null);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    setStatus(null);
+    api
+      .buscarCarteira(auth.usuarioId, auth.accessToken)
+      .then((response) => {
+        if (active) {
+          setWallet(response);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setStatus({ type: "error", message: error.message });
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [auth]);
+
   const visibleMovements = useMemo(() => {
-    if (filter === "debt") return movements.filter((movement) => movement.type === "debit");
-    return movements;
-  }, [filter]);
+    if (!wallet?.movimentos) {
+      return [];
+    }
+
+    const normalized = wallet.movimentos.map((movement, index) => ({
+      id: `${movement.descricao}-${movement.data}-${index}`,
+      title: movement.descricao,
+      date: formatMovementDate(movement.data),
+      amount: Number(movement.valor),
+      type: Number(movement.valor) >= 0 ? "credit" : "debit",
+    }));
+
+    if (filter === "debt") {
+      return normalized.filter((movement) => movement.type === "debit");
+    }
+
+    return normalized;
+  }, [filter, wallet]);
+
+  const solicitarSaque = async () => {
+    if (!auth?.usuarioId || !auth?.accessToken || !wallet) {
+      setStatus({ type: "error", message: "Faca login e aguarde o carregamento da carteira." });
+      return;
+    }
+
+    setLoading(true);
+    setStatus(null);
+    try {
+      const response = await api.solicitarSaque(
+        auth.usuarioId,
+        { valor: wallet.valorMinimoSaque },
+        auth.accessToken,
+      );
+      setWallet(response);
+      setStatus({ type: "success", message: `Saque teste solicitado com valor de ${currency.format(Number(response.valorMinimoSaque))}.` });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const recarregarCarteira = async () => {
+    if (!auth?.usuarioId || !auth?.accessToken) {
+      setStatus({ type: "error", message: "Faca login para atualizar a carteira." });
+      return;
+    }
+
+    setLoading(true);
+    setStatus(null);
+    try {
+      const response = await api.buscarCarteira(auth.usuarioId, auth.accessToken);
+      setWallet(response);
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="screen">
@@ -410,26 +496,26 @@ function WalletScreen() {
 
       <section className="balance-card">
         <span>Saldo atual</span>
-        <strong>{currency.format(wallet.balance)}</strong>
+        <strong>{currency.format(Number(wallet?.saldoAtual || 0))}</strong>
         <div className="debt-meter">
           <div>
             <span>Debito por dinheiro</span>
             <strong>
-              {currency.format(wallet.debt)} / {currency.format(wallet.debtLimit)}
+              {currency.format(Number(wallet?.saldoDevedor || 0))} / {currency.format(Number(wallet?.limiteDevedor || 50))}
             </strong>
           </div>
-          <meter min="0" max={wallet.debtLimit} value={wallet.debt} />
+          <meter min="0" max={Number(wallet?.limiteDevedor || 50)} value={Number(wallet?.saldoDevedor || 0)} />
         </div>
         <div className="balance-actions">
-          <button>
+          <button disabled={!wallet?.podeSacar || loading} onClick={solicitarSaque}>
             <ArrowDownLeft size={20} />
-            Sacar
+            {loading ? "Enviando" : "Sacar"}
           </button>
-          <button>
+          <button disabled>
             <ChevronDown size={20} />
             Rendimento
           </button>
-          <button>
+          <button onClick={recarregarCarteira} disabled={loading}>
             <Clock3 size={20} />
             Extrato
           </button>
@@ -438,17 +524,40 @@ function WalletScreen() {
 
       <section className="section-block">
         <h3>Movimentacoes recentes</h3>
+        <StatusMessage state={status} />
         <section className="wallet-rule-panel">
           <ShieldAlert size={17} />
-          Saques sao liberados a partir de {currency.format(wallet.minimumWithdraw)}. Debitos em dinheiro iguais ou
-          acima de {currency.format(wallet.debtLimit)} suspendem novos projetos.
+          Saques sao liberados a partir de {currency.format(Number(wallet?.valorMinimoSaque || 50))}. Debitos em dinheiro iguais ou
+          acima de {currency.format(Number(wallet?.limiteDevedor || 50))} suspendem novos projetos.
         </section>
         <div className="movement-list">
           {filter === "blocked" ? (
             <div className="empty-state">
               <ShieldAlert size={22} />
-              <strong>Nenhum bloqueio ativo</strong>
-              <span>O limite de saldo devedor esta regular neste momento.</span>
+              <strong>{wallet?.bloqueada ? "Conta temporariamente bloqueada" : "Nenhum bloqueio ativo"}</strong>
+              <span>
+                {wallet?.bloqueada
+                  ? "Seu saldo devedor atingiu o limite e precisa ser regularizado."
+                  : "O limite de saldo devedor esta regular neste momento."}
+              </span>
+            </div>
+          ) : loading && !wallet ? (
+            <div className="empty-state">
+              <Clock3 size={22} />
+              <strong>Carregando carteira</strong>
+              <span>Buscando saldo e movimentos reais da API.</span>
+            </div>
+          ) : !auth?.accessToken ? (
+            <div className="empty-state">
+              <ShieldAlert size={22} />
+              <strong>Login necessario</strong>
+              <span>Entre com o cadastro seguro para ver a carteira real.</span>
+            </div>
+          ) : visibleMovements.length === 0 ? (
+            <div className="empty-state">
+              <Clock3 size={22} />
+              <strong>Sem movimentacoes</strong>
+              <span>A carteira ainda nao registrou operacoes para este usuario.</span>
             </div>
           ) : (
             visibleMovements.map((movement) => (
@@ -683,6 +792,24 @@ function HomeScreen({ setPayment, onOpenOnboarding }) {
   );
 }
 
+function formatMovementDate(value) {
+  if (!value) {
+    return "Agora";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export default function App() {
   const [activeScreen, setActiveScreen] = useState("home");
   const [payment, setPayment] = useState("CARTAO");
@@ -713,7 +840,7 @@ export default function App() {
         {activeScreen === "complete" ? (
           <CompleteScreen auth={auth} projetoAtual={projetoAtual} onProjectUpdated={setProjetoAtual} />
         ) : null}
-        {activeScreen === "wallet" ? <WalletScreen /> : null}
+        {activeScreen === "wallet" ? <WalletScreen auth={auth} /> : null}
         <BottomNav active={activeScreen} onChange={setActiveScreen} />
       </div>
     </div>

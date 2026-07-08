@@ -43,5 +43,10 @@ export const api = {
     apiRequest(`/api/v1/projetos/${projetoId}/concluir-com-foto`, { method: "POST", body: payload, token }),
   liquidarPorDecurso: (projetoId, token) =>
     apiRequest(`/api/v1/projetos/${projetoId}/liquidar-decurso`, { method: "POST", token }),
+  buscarCarteira: (prestadorId, token) => apiRequest(`/api/v1/carteiras/${prestadorId}`, { token }),
+  solicitarSaque: (prestadorId, payload, token) =>
+    apiRequest(`/api/v1/carteiras/${prestadorId}/saques`, { method: "POST", body: payload, token }),
+  registrarDebito: (prestadorId, payload, token) =>
+    apiRequest(`/api/v1/carteiras/${prestadorId}/debitos`, { method: "POST", body: payload, token }),
   checarVersao: (payload) => apiRequest("/api/v1/versao/check", { method: "POST", body: payload }),
 };

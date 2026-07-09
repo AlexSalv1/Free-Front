@@ -18,6 +18,7 @@ import {
   ClipboardCheck,
   CreditCard,
   Eye,
+  EyeOff,
   FileCheck,
   FileText,
   Gift,
@@ -46,7 +47,7 @@ import { api } from "./api/client.js";
 import authSlideClient from "./assets/auth-slide-client.jpg";
 import authSlidePro from "./assets/auth-slide-pro.jpg";
 import { paymentMethods, professional, serviceOrder } from "./data/mockData.js";
-import { captureProfileImage, captureServiceImage } from "./utils/camera.js";
+import { captureDocumentImage, captureProfileImage, captureServiceImage } from "./utils/camera.js";
 import { buildLocationProofLabel, captureCurrentLocation, formatLocationLabel } from "./utils/location.js";
 import { clearSession, loadSession, saveSession } from "./utils/sessionStore.js";
 
@@ -97,6 +98,100 @@ const AUTH_SLIDES = [
   },
 ];
 
+const onlyDigits = (value) => value.replace(/\D/g, "");
+
+const formatCpf = (value) => {
+  const digits = onlyDigits(value).slice(0, 11);
+  return digits
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+};
+
+const formatPhone = (value) => {
+  const digits = onlyDigits(value).slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return digits.replace(/^(\d{2})(\d+)/, "($1) $2");
+  return digits.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, "($1) $2-$3").trim();
+};
+
+const formatDate = (value) => {
+  const digits = onlyDigits(value).slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return digits.replace(/^(\d{2})(\d+)/, "$1/$2");
+  return digits.replace(/^(\d{2})(\d{2})(\d+)/, "$1/$2/$3");
+};
+
+const formatCep = (value) => {
+  const digits = onlyDigits(value).slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return digits.replace(/^(\d{5})(\d+)/, "$1-$2");
+};
+
+function estimateBase64Bytes(base64) {
+  const padding = (base64.match(/=*$/) || [""])[0].length;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+async function sha256Text(value) {
+  if (!globalThis.crypto?.subtle) {
+    return `local-${value.length}-${Date.now()}`;
+  }
+
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function formatBytes(value) {
+  if (!value) {
+    return "0 KB";
+  }
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const formatNameInitials = (value, fallback = "SP") =>
+  (value || fallback)
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part[0] || "")
+    .join("")
+    .toUpperCase();
+
+function createProfileSettingsSeed(auth) {
+  const profileName = auth?.nomeExibicao || "";
+  return {
+    profileOwnerId: auth?.usuarioId || "",
+    nomeExibicao: profileName,
+    categoriaPrincipal: auth?.tipoUsuario === "CLIENTE" ? "Cliente" : "Profissional autônomo",
+    descricao: "",
+    notificacoesPush: true,
+    notificacoesEmail: true,
+    modoSilencioso: false,
+    receberNovidades: false,
+    avatarBase64: "",
+    avatarPreviewUrl: "",
+    cep: "",
+    uf: "",
+    municipio: "",
+    rua: "",
+    bairro: "",
+    numero: "",
+    complemento: "",
+    banco: "",
+    agencia: "",
+    conta: "",
+    chavePix: "",
+    areaAtendimento: "",
+    horarioPreferencial: "",
+    emailContato: auth?.email || "",
+  };
+}
+
 function createNegotiationSeed(selectedService) {
   return {
     ...DEFAULT_NEGOTIATION_FLOW,
@@ -132,6 +227,31 @@ function formatVerificationStatus(status) {
       return "Cadastro rejeitado";
     default:
       return "Pendente";
+  }
+}
+
+function formatSolicitacaoStatus(status) {
+  switch (status) {
+    case "ABERTA":
+      return "Aberta";
+    case "EM_REVISAO":
+      return "Em revisão";
+    case "PAUSADA":
+      return "Pausada";
+    case "CANCELADA":
+      return "Cancelada";
+    case "ACEITA":
+      return "Aceita";
+    case "PENDENTE_ENVIO":
+      return "Pendente de envio";
+    case "EM_ANALISE":
+      return "Em análise";
+    case "APROVADO":
+      return "Aprovado";
+    case "REJEITADO":
+      return "Rejeitado";
+    default:
+      return "Rascunho";
   }
 }
 
@@ -480,12 +600,37 @@ function ProposalCard({ proposal, onAccept, disabled }) {
 
 function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptProposal }) {
   const [status, setStatus] = useState(null);
+  const [proposalSort, setProposalSort] = useState("best");
   const categoryNames = useMemo(() => categorias.map((item) => item.nome), [categorias]);
   const selectedCategoryData = useMemo(
     () => categorias.find((item) => item.nome === quoteFlow.draft.categoria) || categorias[0] || null,
     [categorias, quoteFlow.draft.categoria],
   );
   const availableSubcategories = selectedCategoryData?.subcategorias || [];
+  const descriptionLength = quoteFlow.draft.descricao.trim().length;
+  const regionLabel = [quoteFlow.draft.bairro.trim(), quoteFlow.draft.cidade.trim()].filter(Boolean).join(" - ") || "Região aproximada pendente";
+  const solicitationStatus = quoteFlow.solicitation?.status || "";
+  const canManageSolicitation = solicitationStatus && solicitationStatus !== "ACEITA" && solicitationStatus !== "CANCELADA";
+  const dynamicHints = [
+    "Explique o que precisa ser feito e o que já foi testado no local.",
+    "Mantenha apenas bairro e cidade. O endereço completo continua protegido.",
+    "Quanto melhor o escopo, mais assertivas ficam as propostas recebidas.",
+  ];
+
+  const orderedProposals = useMemo(() => {
+    const list = [...(quoteFlow.proposals || [])];
+    if (proposalSort === "price") {
+      return list.sort((a, b) => Number(a.valor) - Number(b.valor));
+    }
+    if (proposalSort === "speed") {
+      return list.sort((a, b) => {
+        const left = `${a.prazo || ""}`.toLowerCase();
+        const right = `${b.prazo || ""}`.toLowerCase();
+        return left.localeCompare(right);
+      });
+    }
+    return list.sort((a, b) => Number(b.notaMedia || 0) - Number(a.notaMedia || 0));
+  }, [proposalSort, quoteFlow.proposals]);
 
   useEffect(() => {
     if (!quoteFlow.draft.categoria && categoryNames[0]) {
@@ -540,6 +685,80 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
     }
   };
 
+  const atualizarSolicitacao = async () => {
+    if (!quoteFlow.solicitation?.id || !quoteFlow.solicitation?.tokenAcesso) {
+      return;
+    }
+
+    setQuoteFlow((current) => ({ ...current, loading: true }));
+    setStatus(null);
+    try {
+      const solicitacao = await api.atualizarSolicitacaoOrcamento(
+        quoteFlow.solicitation.id,
+        quoteFlow.solicitation.tokenAcesso,
+        quoteFlow.draft,
+      );
+      const propostas = await api.listarPropostasOrcamento(
+        quoteFlow.solicitation.id,
+        quoteFlow.solicitation.tokenAcesso,
+      );
+      setQuoteFlow((current) => ({
+        ...current,
+        solicitation: {
+          ...current.solicitation,
+          ...solicitacao,
+          tokenAcesso: current.solicitation.tokenAcesso,
+        },
+        proposals,
+        loading: false,
+      }));
+      setStatus({ type: "success", message: "Pedido atualizado. Propostas antigas foram revisadas e a lista foi renovada." });
+    } catch (error) {
+      setQuoteFlow((current) => ({ ...current, loading: false }));
+      setStatus({ type: "error", message: error.message });
+    }
+  };
+
+  const executarAcaoSolicitacao = async (action) => {
+    if (!quoteFlow.solicitation?.id || !quoteFlow.solicitation?.tokenAcesso) {
+      return;
+    }
+
+    const actionMap = {
+      pausar: api.pausarSolicitacaoOrcamento,
+      reabrir: api.reabrirSolicitacaoOrcamento,
+      cancelar: api.cancelarSolicitacaoOrcamento,
+    };
+    const successMap = {
+      pausar: "Pedido pausado. Nenhuma nova proposta deve entrar enquanto ele estiver parado.",
+      reabrir: "Pedido reaberto. O fluxo voltou a receber propostas.",
+      cancelar: "Pedido cancelado antes do aceite. O fluxo foi encerrado com segurança.",
+    };
+
+    setQuoteFlow((current) => ({ ...current, loading: true }));
+    setStatus(null);
+    try {
+      const solicitacao = await actionMap[action](quoteFlow.solicitation.id, quoteFlow.solicitation.tokenAcesso);
+      const propostas = action === "cancelar"
+        ? []
+        : await api.listarPropostasOrcamento(quoteFlow.solicitation.id, quoteFlow.solicitation.tokenAcesso);
+      setQuoteFlow((current) => ({
+        ...current,
+        solicitation: {
+          ...current.solicitation,
+          ...solicitacao,
+          tokenAcesso: current.solicitation.tokenAcesso,
+        },
+        proposals,
+        loading: false,
+      }));
+      setStatus({ type: "success", message: successMap[action] });
+    } catch (error) {
+      setQuoteFlow((current) => ({ ...current, loading: false }));
+      setStatus({ type: "error", message: error.message });
+    }
+  };
+
   const aceitarProposta = async (proposal) => {
     setQuoteFlow((current) => ({ ...current, loading: true }));
     setStatus(null);
@@ -562,9 +781,83 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
     quoteFlow.draft.bairro.trim() &&
     quoteFlow.draft.cidade.trim();
 
+  const applyRequestTemplate = (template) => {
+    setQuoteFlow((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        titulo: template.titulo,
+        descricao: template.descricao,
+        urgencia: template.urgencia,
+      },
+    }));
+    setStatus({ type: "success", message: "Modelo aplicado. Agora ajuste os detalhes finais antes de publicar." });
+  };
+
   return (
     <main className="screen">
       <AppHeader title="Aberto a Orçamentos" subtitle="Publique a necessidade e compare propostas com segurança" />
+
+      <section className="home-summary-card offer-summary-card">
+        <div className="home-summary-head">
+          <IconBox>
+            <ClipboardCheck size={19} />
+          </IconBox>
+          <div className="home-intro-copy">
+            <strong>Resumo do pedido</strong>
+            <span>{quoteFlow.draft.subcategoria || "Escolha a subcategoria"} · {quoteFlow.draft.urgencia}</span>
+          </div>
+        </div>
+        <div className="offer-kpis">
+          <div>
+            <strong>{descriptionLength}</strong>
+            <span>caracteres no escopo</span>
+          </div>
+          <div>
+            <strong>{regionLabel}</strong>
+            <span>região informada</span>
+          </div>
+        </div>
+        {quoteFlow.solicitation ? (
+          <div className="offer-chip-row">
+            <span className="payment-chip">Status: {formatSolicitacaoStatus(quoteFlow.solicitation.status)}</span>
+            <span className="payment-chip">Criado em {formatAcceptedDate(quoteFlow.solicitation.criadaEm)}</span>
+          </div>
+        ) : null}
+        <div className="offer-chip-row">
+          {dynamicHints.map((hint) => (
+            <span key={hint} className="payment-chip">{hint}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-intro-card offer-template-card">
+        <div className="home-intro-copy">
+          <strong>Comece mais rápido</strong>
+          <span>Use um modelo base e só ajuste o que for específico do serviço.</span>
+        </div>
+        <div className="offer-template-grid">
+          {[
+            {
+              id: "eletrica",
+              titulo: "Preciso de avaliação e possível reparo elétrico",
+              descricao: "Quero orçamento para avaliar o ponto de energia, identificar causa do problema e informar o valor final antes de executar.",
+              urgencia: "Hoje",
+            },
+            {
+              id: "hidraulica",
+              titulo: "Preciso de orçamento para reparo hidráulico",
+              descricao: "Busco profissional para vistoria inicial, identificação do vazamento e proposta com valor fechado após avaliação.",
+              urgencia: "Nesta semana",
+            },
+          ].map((template) => (
+            <button key={template.id} className="offer-template-button" onClick={() => applyRequestTemplate(template)}>
+              <strong>{template.titulo}</strong>
+              <span>{template.urgencia}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="kyc-card">
         <div className="completion-heading">
@@ -585,6 +878,17 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
           </div>
         ) : (
           <div className="form-stack">
+          <div className="category-strip offer-category-strip">
+            {categoryNames.map((item) => (
+              <button key={item} className={quoteFlow.draft.categoria === item ? "active" : ""} onClick={() => {
+                const category = categorias.find((entry) => entry.nome === item);
+                updateDraft("categoria", item);
+                updateDraft("subcategoria", category?.subcategorias?.[0] || "");
+              }}>
+                {item}
+              </button>
+            ))}
+          </div>
           <label>
             Título do serviço
             <input value={quoteFlow.draft.titulo} onChange={(event) => updateDraft("titulo", event.target.value.slice(0, 80))} />
@@ -656,15 +960,49 @@ function QuoteRequestScreen({ categorias, quoteFlow, setQuoteFlow, onAcceptPropo
       </section>
 
       <StatusMessage state={status} />
-      <button className="primary-action" disabled={!canPublish || quoteFlow.loading} onClick={publicarSolicitacao}>
-        {quoteFlow.loading ? "Publicando..." : "Publicar pedido"}
-      </button>
-
       {quoteFlow.solicitation ? (
+        <section className="home-intro-card offer-management-card">
+          <div className="home-intro-copy">
+            <strong>Ações do pedido</strong>
+            <span>Enquanto ninguém aceitar, o contratante pode editar, pausar, reabrir ou cancelar.</span>
+          </div>
+          <div className="home-intro-actions">
+            <button className="primary-action compact-action" disabled={!canPublish || !canManageSolicitation || quoteFlow.loading} onClick={atualizarSolicitacao}>
+              {quoteFlow.loading ? "Salvando..." : "Salvar alterações"}
+            </button>
+            <button className="secondary-action compact-action" disabled={solicitationStatus === "PAUSADA" || !canManageSolicitation || quoteFlow.loading} onClick={() => executarAcaoSolicitacao("pausar")}>
+              Pausar
+            </button>
+            <button className="secondary-action compact-action" disabled={solicitationStatus !== "PAUSADA" || quoteFlow.loading} onClick={() => executarAcaoSolicitacao("reabrir")}>
+              Reabrir
+            </button>
+            <button className="secondary-action compact-action" disabled={!canManageSolicitation || quoteFlow.loading} onClick={() => executarAcaoSolicitacao("cancelar")}>
+              Cancelar
+            </button>
+          </div>
+        </section>
+      ) : (
+        <button className="primary-action" disabled={!canPublish || quoteFlow.loading} onClick={publicarSolicitacao}>
+          {quoteFlow.loading ? "Publicando..." : "Publicar pedido"}
+        </button>
+      )}
+
+      {quoteFlow.solicitation && quoteFlow.solicitation.status !== "CANCELADA" ? (
         <section className="section-block">
-          <h3>Propostas recebidas</h3>
+          <div className="section-title-row">
+            <h3>Propostas recebidas</h3>
+            <span className="section-count">{orderedProposals.length}</span>
+          </div>
+          <div className="offer-proposal-toolbar">
+            <span>Organizar por</span>
+            <select className="select-input compact-select" value={proposalSort} onChange={(event) => setProposalSort(event.target.value)}>
+              <option value="best">Melhor avaliação</option>
+              <option value="price">Menor valor</option>
+              <option value="speed">Prazo</option>
+            </select>
+          </div>
           <div className="professional-results">
-            {quoteFlow.proposals.map((proposal) => (
+            {orderedProposals.map((proposal) => (
               <ProposalCard key={proposal.id} proposal={proposal} onAccept={aceitarProposta} disabled={quoteFlow.loading} />
             ))}
           </div>
@@ -1561,10 +1899,31 @@ function CompleteScreen({ auth, projetoAtual, onProjectUpdated, selectedService 
 }
 
 function WalletScreen({ auth }) {
-  const [filter, setFilter] = useState("positive");
   const [wallet, setWallet] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  const weekDays = useMemo(() => {
+    const baseDate = new Date(2026, 6, 5);
+    baseDate.setDate(baseDate.getDate() + weekOffset * 7);
+    return Array.from({ length: 7 }, (_, index) => {
+      const current = new Date(baseDate);
+      current.setDate(baseDate.getDate() + index);
+      return current;
+    });
+  }, [weekOffset]);
+
+  const weekLabel = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short" });
+    const start = weekDays[0];
+    const end = weekDays[6];
+    if (!start || !end) {
+      return "Semana atual";
+    }
+    return `${formatter.format(start)} a ${formatter.format(end)} de ${end.getFullYear()}`;
+  }, [weekDays]);
 
   useEffect(() => {
     if (!auth?.usuarioId || !auth?.accessToken) {
@@ -1607,16 +1966,24 @@ function WalletScreen({ auth }) {
       id: `${movement.descricao}-${movement.data}-${index}`,
       title: movement.descricao,
       date: formatMovementDate(movement.data),
+      rawDate: movement.data ? new Date(movement.data) : null,
       amount: Number(movement.valor),
       type: Number(movement.valor) >= 0 ? "credit" : "debit",
     }));
-
-    if (filter === "debt") {
-      return normalized.filter((movement) => movement.type === "debit");
+    if (!selectedDay) {
+      return normalized;
     }
-
-    return normalized;
-  }, [filter, wallet]);
+    return normalized.filter((movement) => {
+      if (!movement.rawDate || Number.isNaN(movement.rawDate.getTime())) {
+        return false;
+      }
+      return (
+        movement.rawDate.getDate() === selectedDay.getDate()
+        && movement.rawDate.getMonth() === selectedDay.getMonth()
+        && movement.rawDate.getFullYear() === selectedDay.getFullYear()
+      );
+    });
+  }, [selectedDay, wallet]);
 
   const solicitarSaque = async () => {
     if (!auth?.usuarioId || !auth?.accessToken || !wallet) {
@@ -1674,38 +2041,47 @@ function WalletScreen({ auth }) {
         </section>
 
         <div className="week-switcher">
-          <button aria-label="Semana anterior">
+          <button aria-label="Semana anterior" onClick={() => setWeekOffset((current) => current - 1)}>
             <ChevronRight size={24} className="flip-icon" />
           </button>
-          <strong>5 de Jul a 11 de Jul de 2026</strong>
-          <button aria-label="Próxima semana">
+          <strong>{weekLabel}</strong>
+          <button aria-label="Próxima semana" onClick={() => setWeekOffset((current) => current + 1)}>
             <ChevronRight size={24} />
           </button>
         </div>
 
         <section className="week-card">
-          {[
-            ["D", "05"],
-            ["S", "06"],
-            ["T", "07"],
-            ["Q", "08"],
-            ["Q", "09"],
-            ["S", "10"],
-            ["S", "11"],
-          ].map(([label, value]) => (
-            <button key={value} onClick={() => setFilter("positive")}>
-              <span>{label}</span>
-              <strong>{value}</strong>
+          {weekDays.map((day) => (
+            <button
+              key={day.toISOString()}
+              className={selectedDay?.toDateString() === day.toDateString() ? "selected" : ""}
+              onClick={() => setSelectedDay(day)}
+            >
+              <span>{new Intl.DateTimeFormat("pt-BR", { weekday: "narrow" }).format(day)}</span>
+              <strong>{new Intl.DateTimeFormat("pt-BR", { day: "2-digit" }).format(day)}</strong>
             </button>
           ))}
         </section>
 
-        <p className="native-empty-copy">Selecione um dia da semana para consultar os detalhes.</p>
+        <section className="quick-offer-strip wallet-action-strip">
+          <strong>Ações rápidas</strong>
+          <div>
+            <button onClick={recarregarCarteira}>Atualizar carteira</button>
+            <button onClick={solicitarSaque}>Solicitar saque teste</button>
+            {selectedDay ? <button onClick={() => setSelectedDay(null)}>Limpar dia</button> : null}
+          </div>
+        </section>
+
+        <p className="native-empty-copy">
+          {selectedDay
+            ? `Movimentações filtradas para ${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(selectedDay)}.`
+            : "Selecione um dia da semana para consultar os detalhes."}
+        </p>
 
         <StatusMessage state={status} />
         {visibleMovements.length > 0 ? (
           <div className="movement-list compact-movement-list">
-            {visibleMovements.slice(0, 3).map((movement) => (
+            {visibleMovements.slice(0, 5).map((movement) => (
               <div className="movement-row" key={movement.id}>
                 <div className={`movement-icon ${movement.type}`}>
                   {movement.type === "credit" ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
@@ -1721,16 +2097,222 @@ function WalletScreen({ auth }) {
               </div>
             ))}
           </div>
-        ) : null}
+        ) : (
+          <p className="native-empty-copy">Nenhuma movimentação encontrada para o período selecionado.</p>
+        )}
       </section>
     </main>
   );
 }
 
-function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus, legalAcceptedAt }) {
+function DocumentsPanel({ auth }) {
+  const [dossie, setDossie] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [draftFiles, setDraftFiles] = useState({
+    documentoFrente: null,
+    documentoVerso: null,
+    selfieComDocumento: null,
+  });
+
+  useEffect(() => {
+    if (!auth?.usuarioId || !auth?.accessToken) {
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    api
+      .buscarDossieDocumental(auth.usuarioId, auth.accessToken)
+      .then((response) => {
+        if (active) {
+          setDossie(response);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setStatus({ type: "error", message: error.message });
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [auth]);
+
+  const captureSlot = async (field, label) => {
+    setStatus(null);
+    try {
+      const image = await captureDocumentImage();
+      if (!image?.base64) {
+        setStatus({ type: "warning", message: `Captura de ${label.toLowerCase()} cancelada.` });
+        return;
+      }
+
+      const hashArquivo = await sha256Text(image.base64);
+      const tamanhoBytes = estimateBase64Bytes(image.base64);
+      setDraftFiles((current) => ({
+        ...current,
+        [field]: {
+          nomeArquivo: `${field}.jpg`,
+          mimeType: "image/jpeg",
+          hashArquivo,
+          tamanhoBytes,
+          conteudoBase64: image.base64,
+          previewUrl: image.previewUrl,
+          sourceLabel: image.sourceLabel || "Imagem preparada",
+        },
+      }));
+      setStatus({ type: "success", message: `${label} preparado com segurança para envio.` });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    }
+  };
+
+  const canSubmit = Object.values(draftFiles).every(Boolean) && auth?.usuarioId && auth?.accessToken;
+
+  const submitDocuments = async () => {
+    if (!canSubmit) {
+      return;
+    }
+
+    setLoading(true);
+    setStatus(null);
+    try {
+      const response = await api.enviarDossieDocumental(
+        auth.usuarioId,
+        {
+          documentoFrente: {
+            nomeArquivo: draftFiles.documentoFrente.nomeArquivo,
+            mimeType: draftFiles.documentoFrente.mimeType,
+            hashArquivo: draftFiles.documentoFrente.hashArquivo,
+            tamanhoBytes: draftFiles.documentoFrente.tamanhoBytes,
+            conteudoBase64: draftFiles.documentoFrente.conteudoBase64,
+          },
+          documentoVerso: {
+            nomeArquivo: draftFiles.documentoVerso.nomeArquivo,
+            mimeType: draftFiles.documentoVerso.mimeType,
+            hashArquivo: draftFiles.documentoVerso.hashArquivo,
+            tamanhoBytes: draftFiles.documentoVerso.tamanhoBytes,
+            conteudoBase64: draftFiles.documentoVerso.conteudoBase64,
+          },
+          selfieComDocumento: {
+            nomeArquivo: draftFiles.selfieComDocumento.nomeArquivo,
+            mimeType: draftFiles.selfieComDocumento.mimeType,
+            hashArquivo: draftFiles.selfieComDocumento.hashArquivo,
+            tamanhoBytes: draftFiles.selfieComDocumento.tamanhoBytes,
+            conteudoBase64: draftFiles.selfieComDocumento.conteudoBase64,
+          },
+        },
+        auth.accessToken,
+      );
+      setDossie(response);
+      setDraftFiles({
+        documentoFrente: null,
+        documentoVerso: null,
+        selfieComDocumento: null,
+      });
+      setStatus({ type: "success", message: "Documentos enviados para análise. O banco guarda apenas metadados e o caminho seguro dos arquivos." });
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="documents-panel">
+      <div className="profile-detail-head">
+        <strong>Status do dossiê</strong>
+        <span>{dossie?.orientacao || "Prepare frente, verso e selfie com documento."}</span>
+      </div>
+
+      <div className="offer-chip-row">
+        <span className="payment-chip">Status: {dossie ? formatSolicitacaoStatus(dossie.status) : "Carregando"}</span>
+        {dossie?.enviadoEm ? <span className="payment-chip">Enviado em {formatAcceptedDate(dossie.enviadoEm)}</span> : null}
+      </div>
+
+      {dossie?.motivoRejeicao ? <section className="inline-result warning">{dossie.motivoRejeicao}</section> : null}
+
+      <div className="doc-upload-grid">
+        {[
+          ["documentoFrente", "Documento frente"],
+          ["documentoVerso", "Documento verso"],
+          ["selfieComDocumento", "Selfie com documento"],
+        ].map(([field, label]) => {
+          const item = draftFiles[field];
+          return (
+            <button key={field} className={`doc-slot-card ${item ? "ready" : ""}`} onClick={() => captureSlot(field, label)} disabled={loading}>
+              <Camera size={22} />
+              <strong>{label}</strong>
+              <span>{item ? `${formatBytes(item.tamanhoBytes)} · pronto para envio` : "Toque para capturar"}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="photo-preview-card document-preview-stack">
+        {Object.entries(draftFiles)
+          .filter(([, item]) => Boolean(item?.previewUrl))
+          .map(([field, item]) => (
+            <div key={field} className="document-preview-item">
+              <img src={item.previewUrl} alt={field} />
+              <span>{item.sourceLabel} · {formatBytes(item.tamanhoBytes)}</span>
+            </div>
+          ))}
+      </div>
+
+      <section className="agreement-note compact">
+        <ShieldAlert size={17} />
+        <p>
+          As imagens são enviadas por conexão autenticada para análise. O banco guarda apenas hash, tipo, tamanho e
+          caminho privado, evitando arquivo pesado e exposição direta.
+        </p>
+      </section>
+
+      <button className="primary-action detail-save-button" disabled={!canSubmit || loading} onClick={submitDocuments}>
+        {loading ? "Enviando..." : "Enviar documentos"}
+      </button>
+
+      <StatusMessage state={status} />
+    </section>
+  );
+}
+
+function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus, legalAcceptedAt, activeSection, setActiveSection }) {
   const [draft, setDraft] = useState(profileSettings);
   const [status, setStatus] = useState(null);
   const [loadingPhoto, setLoadingPhoto] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [menuSearch, setMenuSearch] = useState("");
+
+  const menuItems = [
+    { id: "profile", icon: UserRound, label: "Perfil", description: "Atualize nome, categoria principal e descrição." },
+    { id: "address", icon: MapPinned, label: "Endereço residencial", description: "Organize endereço e dados de localização." },
+    { id: "bank", icon: CreditCard, label: "Dados bancários", description: "Defina Pix e conta para repasses." },
+    { id: "service", icon: BriefcaseBusiness, label: "Preferências de atendimento", description: "Ajuste disponibilidade e área de atuação." },
+    { id: "documents", icon: FileText, label: "Documentos", description: "Acompanhe o envio e a aprovação cadastral." },
+    { id: "incidents", icon: AlertTriangle, label: "Ocorrências", description: "Consulte alertas e registros de suporte." },
+    { id: "invite", icon: Gift, label: "Convidar amigos", description: "Compartilhe o app com sua rede." },
+    { id: "help", icon: CircleHelp, label: "Ajuda", description: "Veja orientações rápidas de uso." },
+    { id: "contacts", icon: Phone, label: "Contatos Free", description: "Canais oficiais de contato e suporte." },
+    { id: "notifications", icon: Bell, label: "Notificações", description: "Defina o que você quer receber." },
+  ];
+
+  const filteredMenuItems = useMemo(() => {
+    const query = menuSearch.trim().toLowerCase();
+    if (!query) {
+      return menuItems;
+    }
+    return menuItems.filter((item) => `${item.label} ${item.description}`.toLowerCase().includes(query));
+  }, [menuSearch]);
+
+  const selectedMenuItem = menuItems.find((item) => item.id === activeSection) || menuItems[0];
 
   useEffect(() => {
     setDraft(profileSettings);
@@ -1771,24 +2353,97 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
     }
   };
 
+  const panelContent = {
+    profile: (
+      <div className="form-stack auth-form-stack native-form-stack compact-native-form">
+        <label>Nome exibido<input value={draft.nomeExibicao} onChange={(event) => updateDraft("nomeExibicao", event.target.value.slice(0, 60))} /></label>
+        <label>Categoria principal<input value={draft.categoriaPrincipal} onChange={(event) => updateDraft("categoriaPrincipal", event.target.value.slice(0, 60))} /></label>
+        <label>Descrição<input value={draft.descricao} onChange={(event) => updateDraft("descricao", event.target.value.slice(0, 180))} /></label>
+      </div>
+    ),
+    address: (
+      <div className="form-stack auth-form-stack native-form-stack compact-native-form">
+        <label>CEP<input inputMode="numeric" value={draft.cep} onChange={(event) => updateDraft("cep", formatCep(event.target.value))} /></label>
+        <div className="native-double-grid">
+          <label>UF<input value={draft.uf} onChange={(event) => updateDraft("uf", event.target.value.toUpperCase().slice(0, 2))} /></label>
+          <label>Município<input value={draft.municipio} onChange={(event) => updateDraft("municipio", event.target.value.slice(0, 60))} /></label>
+        </div>
+        <label>Rua<input value={draft.rua} onChange={(event) => updateDraft("rua", event.target.value.slice(0, 80))} /></label>
+        <div className="native-double-grid">
+          <label>Bairro<input value={draft.bairro} onChange={(event) => updateDraft("bairro", event.target.value.slice(0, 60))} /></label>
+          <label>Número<input value={draft.numero} onChange={(event) => updateDraft("numero", event.target.value.slice(0, 10))} /></label>
+        </div>
+        <label>Complemento<input value={draft.complemento} onChange={(event) => updateDraft("complemento", event.target.value.slice(0, 60))} /></label>
+      </div>
+    ),
+    bank: (
+      <div className="form-stack auth-form-stack native-form-stack compact-native-form">
+        <label>Banco<input value={draft.banco} onChange={(event) => updateDraft("banco", event.target.value.slice(0, 40))} /></label>
+        <div className="native-double-grid">
+          <label>Agência<input value={draft.agencia} onChange={(event) => updateDraft("agencia", event.target.value.slice(0, 10))} /></label>
+          <label>Conta<input value={draft.conta} onChange={(event) => updateDraft("conta", event.target.value.slice(0, 16))} /></label>
+        </div>
+        <label>Chave Pix<input value={draft.chavePix} onChange={(event) => updateDraft("chavePix", event.target.value.slice(0, 80))} /></label>
+      </div>
+    ),
+    service: (
+      <div className="form-stack auth-form-stack native-form-stack compact-native-form">
+        <label>Área de atendimento<input value={draft.areaAtendimento} onChange={(event) => updateDraft("areaAtendimento", event.target.value.slice(0, 80))} /></label>
+        <label>Horário preferencial<input value={draft.horarioPreferencial} onChange={(event) => updateDraft("horarioPreferencial", event.target.value.slice(0, 60))} /></label>
+      </div>
+    ),
+    documents: <DocumentsPanel auth={auth} />,
+    incidents: <p className="panel-copy">Nenhuma ocorrência aberta no momento. Quando houver divergência, cancelamento ou suporte acionado, os registros aparecerão aqui.</p>,
+    invite: <p className="panel-copy">Convites e programa de indicação serão ativados no rollout de produção. A estrutura do menu já está pronta para receber esse fluxo.</p>,
+    help: <p className="panel-copy">Use Ofertas para publicar uma necessidade, Agenda para acompanhar datas, Carteira para visualizar repasses e Menu para ajustar dados pessoais e preferências.</p>,
+    contacts: <p className="panel-copy">Contato operacional centralizado no app durante os testes. Na produção, este bloco receberá telefone, e-mail e atendimento contextual por assunto.</p>,
+    notifications: (
+      <div className="settings-card embedded-settings-card">
+        <label className="toggle-row">
+          <div>
+            <strong>Notificações push</strong>
+            <span>Novos pedidos e atualizações importantes.</span>
+          </div>
+          <input type="checkbox" checked={draft.notificacoesPush} onChange={(event) => updateDraft("notificacoesPush", event.target.checked)} />
+        </label>
+        <label className="toggle-row">
+          <div>
+            <strong>Notificações por e-mail</strong>
+            <span>Comprovantes e avisos de conta.</span>
+          </div>
+          <input type="checkbox" checked={draft.notificacoesEmail} onChange={(event) => updateDraft("notificacoesEmail", event.target.checked)} />
+        </label>
+      </div>
+    ),
+  };
+
   return (
     <main className="screen native-screen menu-screen">
       <section className="native-hero menu-hero">
         <span className="statusbar-space" />
         <div className="menu-profile-head">
           <button className="profile-avatar large" onClick={handlePhoto} disabled={loadingPhoto} aria-label="Alterar foto de perfil">
-            {draft.avatarPreviewUrl ? <img src={draft.avatarPreviewUrl} alt="Foto de perfil" /> : <span>{(draft.nomeExibicao || "RS").slice(0, 2).toUpperCase()}</span>}
+            {draft.avatarPreviewUrl ? <img src={draft.avatarPreviewUrl} alt="Foto de perfil" /> : <span>{formatNameInitials(draft.nomeExibicao || auth?.nomeExibicao || "Seu perfil")}</span>}
             <Camera size={15} />
           </button>
           <div>
             <strong>{draft.nomeExibicao || auth?.nomeExibicao || "Seu perfil"}</strong>
             <span>{auth?.contaDemo ? "Conta demo" : draft.categoriaPrincipal || "Prestador"}</span>
           </div>
-          <Search size={28} />
+          <button className="icon-only-button menu-search-toggle" onClick={() => setShowSearch((current) => !current)} aria-label="Buscar opções do menu">
+            <Search size={24} />
+          </button>
         </div>
       </section>
 
       <section className="menu-content">
+        {showSearch ? (
+          <label className="menu-search-card">
+            <Search size={18} />
+            <input value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="Buscar no menu" />
+          </label>
+        ) : null}
+
         <section className="performance-card">
           <div>
             <strong>0</strong>
@@ -1807,32 +2462,23 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
 
         <h2>Mais visitados</h2>
         <div className="shortcut-row">
-          <button onClick={handlePhoto}>
+          <button onClick={() => setActiveSection("profile")}>
             <UserRound size={30} />
             Dados pessoais
           </button>
-          <button>
+          <button onClick={() => setActiveSection("address")}>
             <MapPinned size={30} />
             Endereço residencial
           </button>
-          <button>
+          <button onClick={() => setActiveSection("bank")}>
             <CreditCard size={30} />
             Dados bancários
           </button>
         </div>
 
         <section className="menu-list">
-          {[
-            [UserRound, "Perfil"],
-            [CreditCard, "Dados bancários"],
-            [BriefcaseBusiness, "Preferências de atendimento"],
-            [AlertTriangle, "Ocorrências"],
-            [Gift, "Convidar amigos"],
-            [CircleHelp, "Ajuda"],
-            [Phone, "Contatos Free"],
-            [Bell, "Notificações"],
-          ].map(([Icon, label]) => (
-            <button key={label}>
+          {filteredMenuItems.map(({ id, icon: Icon, label }) => (
+            <button key={label} className={activeSection === id ? "active" : ""} onClick={() => setActiveSection(id)}>
               <span>
                 <Icon size={28} />
               </span>
@@ -1847,6 +2493,15 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
             <strong>Sair</strong>
             <ChevronRight size={24} />
           </button>
+        </section>
+
+        <section className="settings-card profile-detail-card">
+          <div className="profile-detail-head">
+            <strong>{selectedMenuItem.label}</strong>
+            <span>{selectedMenuItem.description}</span>
+          </div>
+          {panelContent[selectedMenuItem.id]}
+          <button className="primary-action detail-save-button" onClick={saveProfile}>Salvar ajustes</button>
         </section>
 
         <section className="settings-card native-settings-card">
@@ -1882,15 +2537,15 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
   const [termsGateChecked, setTermsGateChecked] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
-  const [loginDraft, setLoginDraft] = useState({ email: DEMO_LOGIN_EMAIL, senha: "" });
+  const [loginDraft, setLoginDraft] = useState({ email: "", senha: "" });
   const [registerDraft, setRegisterDraft] = useState({
-    nomeExibicao: "Rafael Souza",
-    email: `rafael.secure.${Date.now()}@example.com`,
-    senha: "SenhaForte123",
-    confirmarSenha: "SenhaForte123",
-    documento: "52998224725",
-    nascimento: "08/10/2003",
-    telefone: "11988887777",
+    nomeExibicao: "",
+    email: "",
+    senha: "",
+    confirmarSenha: "",
+    documento: "",
+    nascimento: "",
+    telefone: "",
     tipoUsuario: "FREELANCER",
     cep: "",
     uf: "",
@@ -1906,9 +2561,11 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const documentReady = registerDraft.documento.replace(/\D/g, "").length >= 11;
-  const personalStepReady = registerDraft.nomeExibicao.trim() && registerDraft.email.trim() && documentReady && registerDraft.telefone.trim();
+  const birthReady = registerDraft.nascimento.trim().length === 10;
+  const personalStepReady = registerDraft.nomeExibicao.trim() && registerDraft.email.trim() && documentReady && birthReady && registerDraft.telefone.trim();
   const passwordStepReady = registerDraft.senha.length >= 10 && registerDraft.senha === registerDraft.confirmarSenha;
   const addressStepReady = registerDraft.cep.trim() && registerDraft.uf.trim() && registerDraft.municipio.trim() && registerDraft.rua.trim() && registerDraft.bairro.trim() && registerDraft.numero.trim();
+  const registerButtonDisabled = loading || (registerStep === 1 ? !personalStepReady : registerStep === 2 ? !passwordStepReady : !addressStepReady);
 
   useEffect(() => {
     if (sessionNotice) {
@@ -1932,6 +2589,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
     setMode("login");
     setLoginExpanded(true);
     setShowRegisterTerms(false);
+    setShowPassword(false);
     setStatus(null);
   };
 
@@ -1942,6 +2600,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
     setShowRegisterTerms(true);
     setTermsGateChecked(false);
     setAccepted(false);
+    setShowPassword(false);
     setStatus(null);
   };
 
@@ -1974,8 +2633,8 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
         email: registerDraft.email,
         nomeExibicao: registerDraft.nomeExibicao,
         senha: registerDraft.senha,
-        documento: registerDraft.documento,
-        telefone: registerDraft.telefone,
+        documento: onlyDigits(registerDraft.documento),
+        telefone: onlyDigits(registerDraft.telefone),
         tipoUsuario: registerDraft.tipoUsuario,
         turnstileToken: "sandbox-token",
         aceiteTermos: accepted,
@@ -2158,45 +2817,64 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
                 <div className="form-stack auth-form-stack">
                   <label>
                     E-mail
-                    <input value={loginDraft.email} onChange={(event) => setLoginDraft((current) => ({ ...current, email: event.target.value.trim() }))} />
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      value={loginDraft.email}
+                      onChange={(event) => setLoginDraft((current) => ({ ...current, email: event.target.value.trim() }))}
+                    />
                   </label>
                   <label>
                     Senha
-                    <input type="password" value={loginDraft.senha} onChange={(event) => setLoginDraft((current) => ({ ...current, senha: event.target.value }))} />
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={loginDraft.senha}
+                      onChange={(event) => setLoginDraft((current) => ({ ...current, senha: event.target.value }))}
+                    />
                   </label>
+                  {DEMO_LOGIN_EMAIL ? (
+                    <button
+                      type="button"
+                      className="text-link-button auth-demo-fill"
+                      onClick={() => setLoginDraft({ email: DEMO_LOGIN_EMAIL, senha: "FreeDemo@2026" })}
+                    >
+                      Preencher acesso de teste
+                    </button>
+                  ) : null}
                 </div>
               ) : (
                 <>
                   {registerStep === 1 ? (
                     <div className="form-stack auth-form-stack native-form-stack">
-                      <label>Nome completo*<input value={registerDraft.nomeExibicao} onChange={(event) => setRegisterDraft((current) => ({ ...current, nomeExibicao: event.target.value.slice(0, 60) }))} /></label>
-                      <label>Email*<input value={registerDraft.email} onChange={(event) => setRegisterDraft((current) => ({ ...current, email: event.target.value.trim() }))} /></label>
-                      <label>CPF*<input value={registerDraft.documento} onChange={(event) => setRegisterDraft((current) => ({ ...current, documento: event.target.value }))} /></label>
-                      <label>Data de nascimento*<input value={registerDraft.nascimento} onChange={(event) => setRegisterDraft((current) => ({ ...current, nascimento: event.target.value }))} /></label>
-                      <label>Celular*<input value={registerDraft.telefone} onChange={(event) => setRegisterDraft((current) => ({ ...current, telefone: event.target.value }))} /></label>
+                      <label>Nome completo*<input value={registerDraft.nomeExibicao} autoComplete="name" onChange={(event) => setRegisterDraft((current) => ({ ...current, nomeExibicao: event.target.value.slice(0, 60) }))} /></label>
+                      <label>Email*<input type="email" autoComplete="email" value={registerDraft.email} onChange={(event) => setRegisterDraft((current) => ({ ...current, email: event.target.value.trim() }))} /></label>
+                      <label>CPF*<input inputMode="numeric" autoComplete="off" value={registerDraft.documento} onChange={(event) => setRegisterDraft((current) => ({ ...current, documento: formatCpf(event.target.value) }))} /></label>
+                      <label>Data de nascimento*<input inputMode="numeric" autoComplete="bday" value={registerDraft.nascimento} onChange={(event) => setRegisterDraft((current) => ({ ...current, nascimento: formatDate(event.target.value) }))} /></label>
+                      <label>Celular*<input inputMode="tel" autoComplete="tel" value={registerDraft.telefone} onChange={(event) => setRegisterDraft((current) => ({ ...current, telefone: formatPhone(event.target.value) }))} /></label>
                     </div>
                   ) : null}
 
                   {registerStep === 2 ? (
                     <div className="form-stack auth-form-stack native-form-stack">
-                      <label className="password-field">Senha<input type={showPassword ? "text" : "password"} value={registerDraft.senha} onChange={(event) => setRegisterDraft((current) => ({ ...current, senha: event.target.value }))} /><button type="button" onClick={() => setShowPassword((current) => !current)}><Eye size={26} /></button></label>
-                      <label className="password-field">Confirmar senha<input type={showPassword ? "text" : "password"} value={registerDraft.confirmarSenha} onChange={(event) => setRegisterDraft((current) => ({ ...current, confirmarSenha: event.target.value }))} /><button type="button" onClick={() => setShowPassword((current) => !current)}><Eye size={26} /></button></label>
+                      <label className="password-field">Senha<input type={showPassword ? "text" : "password"} autoComplete="new-password" value={registerDraft.senha} onChange={(event) => setRegisterDraft((current) => ({ ...current, senha: event.target.value }))} /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff size={24} /> : <Eye size={24} />}</button></label>
+                      <label className="password-field">Confirmar senha<input type={showPassword ? "text" : "password"} autoComplete="new-password" value={registerDraft.confirmarSenha} onChange={(event) => setRegisterDraft((current) => ({ ...current, confirmarSenha: event.target.value }))} /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff size={24} /> : <Eye size={24} />}</button></label>
                     </div>
                   ) : null}
 
                   {registerStep === 3 ? (
                     <div className="form-stack auth-form-stack native-form-stack">
-                      <label>CEP*<input value={registerDraft.cep} placeholder="_____-___" onChange={(event) => setRegisterDraft((current) => ({ ...current, cep: event.target.value }))} /></label>
+                      <label>CEP*<input inputMode="numeric" value={registerDraft.cep} onChange={(event) => setRegisterDraft((current) => ({ ...current, cep: formatCep(event.target.value) }))} /></label>
                       <div className="native-double-grid">
-                        <label>UF*<input value={registerDraft.uf} placeholder="UF" onChange={(event) => setRegisterDraft((current) => ({ ...current, uf: event.target.value.toUpperCase().slice(0, 2) }))} /></label>
-                        <label>Município*<input value={registerDraft.municipio} placeholder="Digite sua cidade" onChange={(event) => setRegisterDraft((current) => ({ ...current, municipio: event.target.value }))} /></label>
+                        <label>UF*<input value={registerDraft.uf} onChange={(event) => setRegisterDraft((current) => ({ ...current, uf: event.target.value.toUpperCase().slice(0, 2) }))} /></label>
+                        <label>Município*<input value={registerDraft.municipio} onChange={(event) => setRegisterDraft((current) => ({ ...current, municipio: event.target.value }))} /></label>
                       </div>
-                      <label>Rua*<input value={registerDraft.rua} placeholder="Rua" onChange={(event) => setRegisterDraft((current) => ({ ...current, rua: event.target.value }))} /></label>
+                      <label>Rua*<input value={registerDraft.rua} onChange={(event) => setRegisterDraft((current) => ({ ...current, rua: event.target.value }))} /></label>
                       <div className="native-double-grid">
-                        <label>Bairro*<input value={registerDraft.bairro} placeholder="Bairro" onChange={(event) => setRegisterDraft((current) => ({ ...current, bairro: event.target.value }))} /></label>
-                        <label>Número*<input value={registerDraft.numero} placeholder="0" onChange={(event) => setRegisterDraft((current) => ({ ...current, numero: event.target.value }))} /></label>
+                        <label>Bairro*<input value={registerDraft.bairro} onChange={(event) => setRegisterDraft((current) => ({ ...current, bairro: event.target.value }))} /></label>
+                        <label>Número*<input inputMode="numeric" value={registerDraft.numero} onChange={(event) => setRegisterDraft((current) => ({ ...current, numero: event.target.value.replace(/[^\dA-Za-z/-]/g, "").slice(0, 10) }))} /></label>
                       </div>
-                      <label>Complemento<input value={registerDraft.complemento} placeholder="Apartamento 3" onChange={(event) => setRegisterDraft((current) => ({ ...current, complemento: event.target.value }))} /></label>
+                      <label>Complemento<input value={registerDraft.complemento} onChange={(event) => setRegisterDraft((current) => ({ ...current, complemento: event.target.value }))} /></label>
                     </div>
                   ) : null}
                 </>
@@ -2211,7 +2889,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
                 </button>
                 {DEMO_LOGIN_EMAIL ? (
                   <div className="auth-helper-note">
-                    Acesso demo: <strong>{DEMO_LOGIN_EMAIL}</strong>
+                    Conta de teste disponível neste ambiente.
                   </div>
                 ) : null}
                 <button className="text-link-button auth-secondary-link" onClick={openRegister}>
@@ -2221,7 +2899,7 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
             ) : !showRegisterTerms ? (
               <button
                 className="primary-action auth-main-button native-register-action"
-                disabled={(registerStep === 3 && !addressStepReady) || loading}
+                disabled={registerButtonDisabled}
                 onClick={registerStep === 3 ? register : advanceRegister}
               >
                 {loading ? "Validando..." : registerStep === 3 ? "Concluir" : "Avançar"}
@@ -2293,6 +2971,8 @@ function HomeScreen({
   onSelectProfessional,
   onOpenQuotes,
   onOpenProfile,
+  onOpenProfileSection,
+  onOpenAgenda,
   categorias,
   categoriasLoading,
   categoriasStatus,
@@ -2304,6 +2984,7 @@ function HomeScreen({
   selectedCategory,
   setSelectedCategory,
 }) {
+  const [status, setStatus] = useState(null);
   const categoryNames = useMemo(() => ["Todos", ...categorias.map((item) => item.nome)], [categorias]);
   const visibleCategories = useMemo(() => {
     const normalizedQuery = searchTerm.trim().toLowerCase();
@@ -2353,7 +3034,7 @@ function HomeScreen({
       <section className="native-sheet home-native-sheet">
         <h2>Para começar, finalize as etapas abaixo para aprovarmos o seu cadastro:</h2>
 
-        <button className="approval-card">
+        <button className="approval-card" onClick={() => onOpenProfileSection("documents")}>
           <div>
             <strong>1. Envio do Documento</strong>
             <span>
@@ -2396,12 +3077,28 @@ function HomeScreen({
           <strong>Atalhos</strong>
           <div>
             {paymentMethods.map((method) => (
-              <button key={method.id} onClick={() => setPayment(method.id)}>
+              <button
+                key={method.id}
+                onClick={() => {
+                  setPayment(method.id);
+                  setStatus({ type: "success", message: `${method.title} definido como forma principal para o próximo checkout.` });
+                }}
+              >
                 {method.title}
               </button>
             ))}
           </div>
         </section>
+
+        <button className="approval-card" onClick={onOpenAgenda}>
+          <div>
+            <strong>3. Conferir agenda de testes</strong>
+            <small>Veja datas, disponibilidade e o fluxo de atendimento no app.</small>
+          </div>
+          <ChevronRight size={24} />
+        </button>
+
+        <StatusMessage state={status} />
       </section>
     </main>
   );
@@ -2440,8 +3137,11 @@ function formatAcceptedDate(value) {
   }).format(date);
 }
 
-function AgendaScreen({ auth }) {
+function AgendaScreen({ auth, onOpenQuotes }) {
   const days = Array.from({ length: 31 }, (_, index) => index + 1);
+  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1));
+  const [selectedDay, setSelectedDay] = useState(9);
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(currentMonth);
 
   return (
     <main className="screen native-screen">
@@ -2459,11 +3159,17 @@ function AgendaScreen({ auth }) {
 
         <section className="calendar-card">
           <div className="calendar-head">
-            <button aria-label="Mês anterior">
+            <button
+              aria-label="Mês anterior"
+              onClick={() => setCurrentMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+            >
               <ChevronRight size={26} className="flip-icon" />
             </button>
-            <strong>Julho 2026</strong>
-            <button aria-label="Próximo mês">
+            <strong>{monthLabel}</strong>
+            <button
+              aria-label="Próximo mês"
+              onClick={() => setCurrentMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+            >
               <ChevronRight size={26} />
             </button>
           </div>
@@ -2474,14 +3180,25 @@ function AgendaScreen({ auth }) {
           </div>
           <div className="calendar-grid">
             {days.map((day) => (
-              <button key={day} className={day === 9 ? "selected" : day < 6 ? "muted" : ""}>
+              <button key={day} className={day === selectedDay ? "selected" : day < 6 ? "muted" : ""} onClick={() => setSelectedDay(day)}>
                 {day}
               </button>
             ))}
           </div>
         </section>
 
-        <p className="native-empty-copy">Escolha uma data para conferir os atendimentos agendados.</p>
+        <p className="native-empty-copy">
+          {selectedDay
+            ? `Data selecionada: ${String(selectedDay).padStart(2, "0")}/${String(currentMonth.getMonth() + 1).padStart(2, "0")}/${currentMonth.getFullYear()}.`
+            : "Escolha uma data para conferir os atendimentos agendados."}
+        </p>
+        <section className="quick-offer-strip wallet-action-strip">
+          <strong>Próximo passo</strong>
+          <div>
+            <button onClick={onOpenQuotes}>Ver ofertas</button>
+            <button onClick={() => setSelectedDay(9)}>Hoje</button>
+          </div>
+        </section>
         {auth?.contaDemo ? <StatusMessage state={{ type: "warning", message: "Conta demo ativa para navegação visual." }} /> : null}
       </section>
     </main>
@@ -2509,17 +3226,8 @@ export default function App() {
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [legalCheckbox, setLegalCheckbox] = useState(false);
   const [legalAcceptedAt, setLegalAcceptedAt] = useState(null);
-  const [profileSettings, setProfileSettings] = useState({
-    nomeExibicao: "Rafael Souza",
-    categoriaPrincipal: "Eletricista Profissional",
-    descricao: "Atendimento residencial com foco em instalações, reparos e finalização segura do serviço.",
-    notificacoesPush: true,
-    notificacoesEmail: true,
-    modoSilencioso: false,
-    receberNovidades: false,
-    avatarBase64: "",
-    avatarPreviewUrl: "",
-  });
+  const [profileSection, setProfileSection] = useState("profile");
+  const [profileSettings, setProfileSettings] = useState(createProfileSettingsSeed(null));
   const [selectedService, setSelectedService] = useState({
     title: serviceOrder.title,
     description: "Instalar chuveiro 220V com validação de garantia e segurança operacional.",
@@ -2630,6 +3338,25 @@ export default function App() {
         : null,
     });
   }, [activeScreen, auth, dismissedVersionNotice, legalAccepted, legalAcceptedAt, negotiationFlow, payment, profileSettings, projetoAtual, quoteFlow, selectedService, sessionReady]);
+
+  useEffect(() => {
+    if (!auth?.usuarioId) {
+      return;
+    }
+
+    setProfileSettings((current) => {
+      if (current.profileOwnerId === auth.usuarioId) {
+        return {
+          ...current,
+          nomeExibicao: current.nomeExibicao || auth.nomeExibicao || "",
+          emailContato: current.emailContato || auth.email || "",
+          categoriaPrincipal: current.categoriaPrincipal || (auth.tipoUsuario === "CLIENTE" ? "Cliente" : "Profissional autônomo"),
+        };
+      }
+
+      return createProfileSettingsSeed(auth);
+    });
+  }, [auth]);
 
   useEffect(() => {
     let active = true;
@@ -2850,6 +3577,11 @@ export default function App() {
       }
     : null;
 
+  const openProfileSection = (section) => {
+    setProfileSection(section);
+    setActiveScreen("profile");
+  };
+
   if (!sessionReady) {
     return (
       <div className="app-shell">
@@ -2885,7 +3617,9 @@ export default function App() {
             setPayment={selectPayment}
             onSelectProfessional={selectProfessional}
             onOpenQuotes={() => setActiveScreen("quotes")}
-            onOpenProfile={() => setActiveScreen("profile")}
+            onOpenProfile={() => openProfileSection("help")}
+            onOpenProfileSection={openProfileSection}
+            onOpenAgenda={() => setActiveScreen("agenda")}
             categorias={categorias}
             categoriasLoading={categoriasLoading}
             categoriasStatus={categoriasStatus}
@@ -2931,7 +3665,7 @@ export default function App() {
           <CompleteScreen auth={authWithActions} projetoAtual={projetoAtual} onProjectUpdated={setProjetoAtual} selectedService={selectedService} />
         ) : null}
         {auth && activeScreen === "agenda" ? (
-          <AgendaScreen auth={authWithActions} />
+          <AgendaScreen auth={authWithActions} onOpenQuotes={() => setActiveScreen("quotes")} />
         ) : null}
         {auth && activeScreen === "wallet" ? (
           <WalletScreen auth={authWithActions} />
@@ -2943,6 +3677,8 @@ export default function App() {
             setProfileSettings={setProfileSettings}
             versaoStatus={versaoStatus}
             legalAcceptedAt={legalAcceptedAt}
+            activeSection={profileSection}
+            setActiveSection={setProfileSection}
           />
         ) : null}
         {auth ? <BottomNav active={activeScreen} onChange={setActiveScreen} /> : null}

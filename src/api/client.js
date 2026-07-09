@@ -111,6 +111,43 @@ export const api = {
   listarCategorias: () => apiRequest("/api/v1/categorias"),
   listarProfissionais: () => apiRequest("/api/v1/catalogo/profissionais"),
   criarSolicitacaoOrcamento: (payload) => apiRequest("/api/v1/orcamentos/solicitacoes", { method: "POST", body: payload }),
+  atualizarSolicitacaoOrcamento: (solicitacaoId, tokenAcesso, payload) =>
+    apiRequest(`/api/v1/orcamentos/solicitacoes/${solicitacaoId}`, {
+      method: "PUT",
+      headers: tokenAcesso
+        ? {
+            "X-Solicitacao-Token": tokenAcesso,
+          }
+        : undefined,
+      body: payload,
+    }),
+  pausarSolicitacaoOrcamento: (solicitacaoId, tokenAcesso) =>
+    apiRequest(`/api/v1/orcamentos/solicitacoes/${solicitacaoId}/pausar`, {
+      method: "POST",
+      headers: tokenAcesso
+        ? {
+            "X-Solicitacao-Token": tokenAcesso,
+          }
+        : undefined,
+    }),
+  reabrirSolicitacaoOrcamento: (solicitacaoId, tokenAcesso) =>
+    apiRequest(`/api/v1/orcamentos/solicitacoes/${solicitacaoId}/reabrir`, {
+      method: "POST",
+      headers: tokenAcesso
+        ? {
+            "X-Solicitacao-Token": tokenAcesso,
+          }
+        : undefined,
+    }),
+  cancelarSolicitacaoOrcamento: (solicitacaoId, tokenAcesso) =>
+    apiRequest(`/api/v1/orcamentos/solicitacoes/${solicitacaoId}/cancelar`, {
+      method: "POST",
+      headers: tokenAcesso
+        ? {
+            "X-Solicitacao-Token": tokenAcesso,
+          }
+        : undefined,
+    }),
   listarPropostasOrcamento: (solicitacaoId, tokenAcesso) =>
     apiRequest(`/api/v1/orcamentos/solicitacoes/${solicitacaoId}/propostas`, {
       headers: tokenAcesso
@@ -161,6 +198,9 @@ export const api = {
     apiRequest(`/api/v1/auth/usuarios/${usuarioId}/verificar-otp`, { method: "POST", body: payload }),
   login: (payload) => apiRequest("/api/v1/auth/login", { method: "POST", body: payload }),
   buscarUsuario: (usuarioId, token) => apiRequest(`/api/v1/auth/usuarios/${usuarioId}`, { token }),
+  buscarDossieDocumental: (usuarioId, token) => apiRequest(`/api/v1/kyc/usuarios/${usuarioId}/documentos`, { token }),
+  enviarDossieDocumental: (usuarioId, payload, token) =>
+    apiRequest(`/api/v1/kyc/usuarios/${usuarioId}/documentos`, { method: "POST", body: payload, token }),
   criarCheckout: (payload, token) =>
     apiRequest("/api/v1/projetos/checkout", { method: "POST", body: payload, token }),
   confirmarToken: (projetoId, payload, token) =>

@@ -142,3 +142,17 @@ export async function captureProfileImage() {
     sourceLabel: payload.sourceLabel,
   };
 }
+
+export async function captureDocumentImage() {
+  const payload = await captureServiceImage();
+  if (!payload?.base64) {
+    return null;
+  }
+
+  const compressed = await compressImage(payload.base64, 1280, 0.78);
+  return {
+    base64: compressed.base64,
+    previewUrl: compressed.previewUrl,
+    sourceLabel: payload.sourceLabel,
+  };
+}

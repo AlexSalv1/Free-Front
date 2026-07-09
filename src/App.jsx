@@ -2,24 +2,35 @@
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  AlertTriangle,
   BadgeCheck,
+  Bell,
   BriefcaseBusiness,
+  Calendar,
   CalendarDays,
   Camera,
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   Clock3,
+  ClipboardCheck,
   CreditCard,
   Eye,
   FileCheck,
   FileText,
+  Gift,
   Home,
+  Hourglass,
   KeyRound,
   Landmark,
+  LogOut,
   Mail,
+  Menu,
   MapPin,
+  MapPinned,
+  Phone,
   QrCode,
   Search,
   Send,
@@ -347,10 +358,10 @@ function PaymentMethod({ method, selected, onSelect, compact = false }) {
 function BottomNav({ active, onChange }) {
   const tabs = [
     { id: "home", label: "Inicio", icon: Home },
-    { id: "checkout", label: "Pedidos", icon: BriefcaseBusiness },
-    { id: "complete", label: "Concluir", icon: CheckCircle2 },
+    { id: "quotes", label: "Ofertas", icon: BriefcaseBusiness },
+    { id: "agenda", label: "Agenda", icon: Calendar },
     { id: "wallet", label: "Carteira", icon: Wallet },
-    { id: "profile", label: "Perfil", icon: UserRound },
+    { id: "profile", label: "Menu", icon: Menu },
   ];
 
   return (
@@ -366,6 +377,7 @@ function BottomNav({ active, onChange }) {
             title={tab.label}
           >
             <Icon size={24} strokeWidth={active === tab.id ? 2.6 : 2} />
+            <span>{tab.label}</span>
           </button>
         );
       })}
@@ -1648,88 +1660,52 @@ function WalletScreen({ auth }) {
   };
 
   return (
-    <main className="screen">
-      <AppHeader title="Carteira" subtitle="Seus recebimentos e taxas" right={<Eye size={20} />} />
-      <SessionBanner auth={auth} onReset={auth?.logout} />
-      <div className="wallet-tabs">
-        <button className={filter === "positive" ? "active" : ""} onClick={() => setFilter("positive")}>
-          Saldo positivo
-        </button>
-        <button className={filter === "debt" ? "active" : ""} onClick={() => setFilter("debt")}>
-          Devendo (perto do limite)
-        </button>
-        <button className={filter === "blocked" ? "active muted" : "muted"} onClick={() => setFilter("blocked")}>
-          Conta bloqueada
-        </button>
-      </div>
-
-      <section className="balance-card">
-        <span>Saldo atual</span>
+    <main className="screen native-screen">
+      <section className="native-hero wallet-hero">
+        <span className="statusbar-space" />
+        <small>Saldo da semana</small>
         <strong>{currency.format(Number(wallet?.saldoAtual || 0))}</strong>
-        <div className="debt-meter">
-          <div>
-            <span>Debito por dinheiro</span>
-            <strong>
-              {currency.format(Number(wallet?.saldoDevedor || 0))} / {currency.format(Number(wallet?.limiteDevedor || 50))}
-            </strong>
-          </div>
-          <meter min="0" max={Number(wallet?.limiteDevedor || 50)} value={Number(wallet?.saldoDevedor || 0)} />
-        </div>
-        <div className="balance-actions">
-          <button disabled={!wallet?.podeSacar || loading} onClick={solicitarSaque}>
-            <ArrowDownLeft size={20} />
-            {loading ? "Enviando" : "Sacar"}
-          </button>
-          <button disabled>
-            <ChevronDown size={20} />
-            Rendimento
-          </button>
-          <button onClick={recarregarCarteira} disabled={loading}>
-            <Clock3 size={20} />
-            Extrato
-          </button>
-        </div>
       </section>
 
-      <section className="section-block">
-        <h3>Movimentacoes recentes</h3>
-        <StatusMessage state={status} />
-        <section className="wallet-rule-panel">
-          <ShieldAlert size={17} />
-          Saques são liberados a partir de {currency.format(Number(wallet?.valorMinimoSaque || 50))}. Débitos em dinheiro iguais ou
-          acima de {currency.format(Number(wallet?.limiteDevedor || 50))} suspendem novos projetos.
+      <section className="native-sheet wallet-native-sheet">
+        <section className="native-alert">
+          <Hourglass size={21} />
+          <span>Aguarde! Estamos validando o seu cadastro. Para começar a receber ofertas é necessário ter o cadastro aprovado.</span>
         </section>
-        <div className="movement-list">
-          {filter === "blocked" ? (
-            <div className="empty-state">
-              <ShieldAlert size={22} />
-              <strong>{wallet?.bloqueada ? "Conta temporariamente bloqueada" : "Nenhum bloqueio ativo"}</strong>
-              <span>
-                {wallet?.bloqueada
-                  ? "Seu saldo devedor atingiu o limite e precisa ser regularizado."
-                  : "O limite de saldo devedor esta regular neste momento."}
-              </span>
-            </div>
-          ) : loading && !wallet ? (
-            <div className="empty-state">
-              <Clock3 size={22} />
-              <strong>Carregando carteira</strong>
-              <span>Buscando saldo e movimentos reais da API.</span>
-            </div>
-          ) : !auth?.accessToken ? (
-            <div className="empty-state">
-              <ShieldAlert size={22} />
-              <strong>Login necessario</strong>
-              <span>Entre com o cadastro seguro para ver a carteira real.</span>
-            </div>
-          ) : visibleMovements.length === 0 ? (
-            <div className="empty-state">
-              <Clock3 size={22} />
-              <strong>Sem movimentações</strong>
-              <span>A carteira ainda não registrou operações para este usuário.</span>
-            </div>
-          ) : (
-            visibleMovements.map((movement) => (
+
+        <div className="week-switcher">
+          <button aria-label="Semana anterior">
+            <ChevronRight size={24} className="flip-icon" />
+          </button>
+          <strong>5 de Jul a 11 de Jul de 2026</strong>
+          <button aria-label="Próxima semana">
+            <ChevronRight size={24} />
+          </button>
+        </div>
+
+        <section className="week-card">
+          {[
+            ["D", "05"],
+            ["S", "06"],
+            ["T", "07"],
+            ["Q", "08"],
+            ["Q", "09"],
+            ["S", "10"],
+            ["S", "11"],
+          ].map(([label, value]) => (
+            <button key={value} onClick={() => setFilter("positive")}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </button>
+          ))}
+        </section>
+
+        <p className="native-empty-copy">Selecione um dia da semana para consultar os detalhes.</p>
+
+        <StatusMessage state={status} />
+        {visibleMovements.length > 0 ? (
+          <div className="movement-list compact-movement-list">
+            {visibleMovements.slice(0, 3).map((movement) => (
               <div className="movement-row" key={movement.id}>
                 <div className={`movement-icon ${movement.type}`}>
                   {movement.type === "credit" ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
@@ -1743,9 +1719,9 @@ function WalletScreen({ auth }) {
                   {currency.format(movement.amount)}
                 </em>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        ) : null}
       </section>
     </main>
   );
@@ -1796,134 +1772,103 @@ function ProfileScreen({ auth, profileSettings, setProfileSettings, versaoStatus
   };
 
   return (
-    <main className="screen">
-      <AppHeader title="Perfil" subtitle="Dados pessoais e configurações do aplicativo" />
-      <SessionBanner auth={auth} onReset={auth?.logout} />
-
-      <section className="profile-card">
-        <div className="profile-hero">
-          <button className="profile-avatar" onClick={handlePhoto} disabled={loadingPhoto} aria-label="Alterar foto de perfil">
-            {draft.avatarPreviewUrl ? (
-              <img src={draft.avatarPreviewUrl} alt="Foto de perfil" />
-            ) : (
-              <span>{(draft.nomeExibicao || "RS").slice(0, 2).toUpperCase()}</span>
-            )}
+    <main className="screen native-screen menu-screen">
+      <section className="native-hero menu-hero">
+        <span className="statusbar-space" />
+        <div className="menu-profile-head">
+          <button className="profile-avatar large" onClick={handlePhoto} disabled={loadingPhoto} aria-label="Alterar foto de perfil">
+            {draft.avatarPreviewUrl ? <img src={draft.avatarPreviewUrl} alt="Foto de perfil" /> : <span>{(draft.nomeExibicao || "RS").slice(0, 2).toUpperCase()}</span>}
+            <Camera size={15} />
           </button>
-          <div className="profile-hero-copy">
-            <strong>{draft.nomeExibicao || "Seu perfil"}</strong>
-            <span>{draft.categoriaPrincipal || "Prestador de serviços"}</span>
-            <small>{loadingPhoto ? "Processando foto..." : "Toque na foto para alterar"}</small>
+          <div>
+            <strong>{draft.nomeExibicao || auth?.nomeExibicao || "Seu perfil"}</strong>
+            <span>{auth?.contaDemo ? "Conta demo" : draft.categoriaPrincipal || "Prestador"}</span>
           </div>
-        </div>
-
-        <div className="form-stack">
-          <label>
-            Nome exibido
-            <input value={draft.nomeExibicao} onChange={(event) => updateDraft("nomeExibicao", event.target.value.slice(0, 60))} />
-          </label>
-          <label>
-            Categoria principal
-            <input
-              value={draft.categoriaPrincipal}
-              onChange={(event) => updateDraft("categoriaPrincipal", event.target.value.slice(0, 60))}
-            />
-          </label>
-          <label>
-            Descrição profissional
-            <textarea
-              className="multiline-input"
-              value={draft.descricao}
-              onChange={(event) => updateDraft("descricao", event.target.value.slice(0, 280))}
-              placeholder="Conte um pouco sobre sua experiencia, especialidades e atendimento."
-            />
-          </label>
+          <Search size={28} />
         </div>
       </section>
 
-      <section className="section-block">
-        <h3>Configurações comuns</h3>
-        <section className="settings-card">
+      <section className="menu-content">
+        <section className="performance-card">
+          <div>
+            <strong>0</strong>
+            <span>Avaliação</span>
+          </div>
+          <div>
+            <strong>0</strong>
+            <span>Atendimentos finalizados</span>
+          </div>
+          <div>
+            <strong>0</strong>
+            <span>Pontos em aberto</span>
+          </div>
+          <button onClick={saveProfile}>Meu desempenho</button>
+        </section>
+
+        <h2>Mais visitados</h2>
+        <div className="shortcut-row">
+          <button onClick={handlePhoto}>
+            <UserRound size={30} />
+            Dados pessoais
+          </button>
+          <button>
+            <MapPinned size={30} />
+            Endereço residencial
+          </button>
+          <button>
+            <CreditCard size={30} />
+            Dados bancários
+          </button>
+        </div>
+
+        <section className="menu-list">
+          {[
+            [UserRound, "Perfil"],
+            [CreditCard, "Dados bancários"],
+            [BriefcaseBusiness, "Preferências de atendimento"],
+            [AlertTriangle, "Ocorrências"],
+            [Gift, "Convidar amigos"],
+            [CircleHelp, "Ajuda"],
+            [Phone, "Contatos Free"],
+            [Bell, "Notificações"],
+          ].map(([Icon, label]) => (
+            <button key={label}>
+              <span>
+                <Icon size={28} />
+              </span>
+              <strong>{label}</strong>
+              <ChevronRight size={24} />
+            </button>
+          ))}
+          <button onClick={auth?.logout}>
+            <span>
+              <LogOut size={28} />
+            </span>
+            <strong>Sair</strong>
+            <ChevronRight size={24} />
+          </button>
+        </section>
+
+        <section className="settings-card native-settings-card">
           <label className="toggle-row">
             <div>
               <strong>Notificações push</strong>
-              <span>Novos pedidos, atualizacoes e alertas importantes.</span>
+              <span>Novos pedidos e alertas importantes.</span>
             </div>
-            <input
-              type="checkbox"
-              checked={draft.notificacoesPush}
-              onChange={(event) => updateDraft("notificacoesPush", event.target.checked)}
-            />
+            <input type="checkbox" checked={draft.notificacoesPush} onChange={(event) => updateDraft("notificacoesPush", event.target.checked)} />
           </label>
-          <label className="toggle-row">
-            <div>
-              <strong>Notificações por e-mail</strong>
-              <span>Resumo de movimentações e confirmações da conta.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={draft.notificacoesEmail}
-              onChange={(event) => updateDraft("notificacoesEmail", event.target.checked)}
-            />
-          </label>
-          <label className="toggle-row">
-            <div>
-              <strong>Modo silencioso</strong>
-              <span>Reduz avisos sonoros durante o expediente.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={draft.modoSilencioso}
-              onChange={(event) => updateDraft("modoSilencioso", event.target.checked)}
-            />
-          </label>
-          <label className="toggle-row">
-            <div>
-              <strong>Receber novidades do app</strong>
-              <span>Lancamentos, melhorias e dicas de uso.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={draft.receberNovidades}
-              onChange={(event) => updateDraft("receberNovidades", event.target.checked)}
-            />
-          </label>
-        </section>
-      </section>
-
-      <section className="section-block">
-        <h3>Conta e aplicativo</h3>
-        <section className="settings-card">
-          <div className="settings-row">
-            <strong>Conta ativa</strong>
-            <span>{auth?.nomeExibicao || auth?.email || "Não autenticado"}</span>
-          </div>
-          <div className="settings-row">
-            <strong>Status cadastral</strong>
-            <span>{formatVerificationStatus(auth?.statusVerificacaoCadastral)}</span>
-          </div>
           <div className="settings-row">
             <strong>Versão do app</strong>
-            <span>{APP_VERSION}</span>
-          </div>
-          <div className="settings-row">
-            <strong>Compatibilidade</strong>
-            <span>{versaoStatus?.message || "Validação pendente"}</span>
+            <span>{APP_VERSION} · {versaoStatus?.type === "success" ? "compatível" : "validação pendente"}</span>
           </div>
           <div className="settings-row">
             <strong>Termos aceitos</strong>
             <span>{legalAcceptedAt ? formatAcceptedDate(legalAcceptedAt) : "Pendente"}</span>
           </div>
-          <div className="settings-row">
-            <strong>Foto de perfil</strong>
-            <span>Salvamos apenas uma versão compactada para evitar arquivos pesados.</span>
-          </div>
         </section>
-      </section>
 
-      <StatusMessage state={status} />
-      <button className="primary-action" onClick={saveProfile}>
-        Salvar perfil
-      </button>
+        <StatusMessage state={status} />
+      </section>
     </main>
   );
 }
@@ -1932,15 +1877,28 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
   const [mode, setMode] = useState("login");
   const [loginExpanded, setLoginExpanded] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [registerStep, setRegisterStep] = useState(1);
+  const [showRegisterTerms, setShowRegisterTerms] = useState(false);
+  const [termsGateChecked, setTermsGateChecked] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [loginDraft, setLoginDraft] = useState({ email: DEMO_LOGIN_EMAIL, senha: "" });
   const [registerDraft, setRegisterDraft] = useState({
     nomeExibicao: "Rafael Souza",
     email: `rafael.secure.${Date.now()}@example.com`,
     senha: "SenhaForte123",
+    confirmarSenha: "SenhaForte123",
     documento: "52998224725",
+    nascimento: "08/10/2003",
     telefone: "11988887777",
     tipoUsuario: "FREELANCER",
+    cep: "",
+    uf: "",
+    municipio: "",
+    rua: "",
+    bairro: "",
+    numero: "",
+    complemento: "",
   });
   const [otpSent, setOtpSent] = useState(null);
   const [otpDraft, setOtpDraft] = useState({ codigoEmail: "", codigoTelefone: "" });
@@ -1948,6 +1906,9 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const documentReady = registerDraft.documento.replace(/\D/g, "").length >= 11;
+  const personalStepReady = registerDraft.nomeExibicao.trim() && registerDraft.email.trim() && documentReady && registerDraft.telefone.trim();
+  const passwordStepReady = registerDraft.senha.length >= 10 && registerDraft.senha === registerDraft.confirmarSenha;
+  const addressStepReady = registerDraft.cep.trim() && registerDraft.uf.trim() && registerDraft.municipio.trim() && registerDraft.rua.trim() && registerDraft.bairro.trim() && registerDraft.numero.trim();
 
   useEffect(() => {
     if (sessionNotice) {
@@ -1970,13 +1931,39 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
   const openLogin = () => {
     setMode("login");
     setLoginExpanded(true);
+    setShowRegisterTerms(false);
     setStatus(null);
   };
 
   const openRegister = () => {
     setMode("register");
     setLoginExpanded(false);
+    setRegisterStep(1);
+    setShowRegisterTerms(true);
+    setTermsGateChecked(false);
+    setAccepted(false);
     setStatus(null);
+  };
+
+  const acceptRegisterTerms = () => {
+    setAccepted(true);
+    setShowRegisterTerms(false);
+    setStatus(null);
+  };
+
+  const advanceRegister = () => {
+    setStatus(null);
+    if (registerStep === 1 && !personalStepReady) {
+      setStatus({ type: "error", message: "Preencha seus dados pessoais para avançar." });
+      return;
+    }
+    if (registerStep === 2 && !passwordStepReady) {
+      setStatus({ type: "error", message: "Crie uma senha forte e confirme corretamente." });
+      return;
+    }
+    if (registerStep < 3) {
+      setRegisterStep((current) => current + 1);
+    }
   };
 
   const register = async () => {
@@ -2059,11 +2046,25 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
 
   return (
     <main className="screen auth-screen">
-      <section className="auth-shell">
+      <section className={`auth-shell ${mode === "register" ? "register-shell" : ""}`}>
         <header className="auth-hero">
-          <div className="auth-hero-mark">{mode === "register" ? <UserPlus size={20} /> : <KeyRound size={20} />}</div>
-          <h1>Entrar</h1>
-          <p>{mode === "login" ? "Acesso seguro com sessão lembrada neste dispositivo." : "Crie sua conta com validação inicial antes de liberar recursos sensíveis."}</p>
+          {mode === "register" ? (
+            <span className="step-pill">{showRegisterTerms ? "Obrigatório" : `Etapa ${registerStep} de 3`}</span>
+          ) : (
+            <div className="auth-hero-mark"><KeyRound size={20} /></div>
+          )}
+          <h1>{mode === "register" ? showRegisterTerms ? "Termos de uso" : registerStep === 1 ? "Crie seu acesso" : registerStep === 2 ? "Crie sua senha" : "Seu endereço" : "Entrar"}</h1>
+          <p>
+            {mode === "login"
+              ? "Acesso seguro com sessão lembrada neste dispositivo."
+              : showRegisterTerms
+                ? "Antes de criar sua conta, leia e aceite as regras principais da plataforma."
+                : registerStep === 1
+                  ? "Informe seus dados pessoais para criar seu acesso."
+                  : registerStep === 2
+                    ? "Crie sua senha com no mínimo 10 caracteres."
+                    : "Informe seu endereço completo para finalizar seu cadastro."}
+          </p>
         </header>
 
         {mode === "login" && !loginExpanded ? (
@@ -2119,15 +2120,40 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
               </button>
             )}
 
-            <section className="kyc-card auth-card">
-              <div className="completion-heading auth-card-heading">
-                <IconBox>{mode === "login" ? <KeyRound size={21} /> : <UserPlus size={21} />}</IconBox>
-                <div>
-                  <strong>{mode === "login" ? "Acesso do usuário" : "Cadastro do prestador"}</strong>
-                  <small>{mode === "login" ? "Informe seus dados para continuar." : "Seus dados ficam protegidos e passam por validação inicial."}</small>
+            {mode === "register" && showRegisterTerms ? (
+              <section className="register-terms-screen">
+                <div className="register-terms-card">
+                  <div>
+                    <strong>Uso seguro da plataforma</strong>
+                    <span>Você concorda em informar dados verdadeiros e manter sua conta protegida.</span>
+                  </div>
+                  <div>
+                    <strong>Pagamentos e garantias</strong>
+                    <span>Cartão e Pix no app seguem com garantia. Pagamento em dinheiro no local tem regras próprias e menor cobertura.</span>
+                  </div>
+                  <div>
+                    <strong>Privacidade e dados</strong>
+                    <span>Usamos documento, telefone, localização e imagens apenas para validação, segurança, auditoria e execução do serviço.</span>
+                  </div>
+                  <div>
+                    <strong>Conduta e responsabilidade</strong>
+                    <span>Fraudes, abuso, tentativa de burlar pagamentos ou uso indevido podem bloquear a conta.</span>
+                  </div>
                 </div>
-              </div>
 
+                <label className="terms-panel auth-terms-panel register-terms-accept">
+                  <input type="checkbox" checked={termsGateChecked} onChange={(event) => setTermsGateChecked(event.target.checked)} />
+                  <span>
+                    Li e aceito os <strong>Termos de Uso</strong> e a <strong>Política de Privacidade</strong>. Estou ciente de que o aceite será registrado com data, IP e versão jurídica vigente.
+                  </span>
+                </label>
+
+                <button className="primary-action auth-main-button native-register-action" disabled={!termsGateChecked} onClick={acceptRegisterTerms}>
+                  Aceitar e continuar
+                </button>
+              </section>
+            ) : (
+            <section className={mode === "register" ? "auth-step-card" : "kyc-card auth-card"}>
               {mode === "login" ? (
                 <div className="form-stack auth-form-stack">
                   <label>
@@ -2141,62 +2167,42 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
                 </div>
               ) : (
                 <>
-                  <div className="form-stack auth-form-stack">
-                    <label>
-                      Nome
-                      <input
-                        value={registerDraft.nomeExibicao}
-                        onChange={(event) => setRegisterDraft((current) => ({ ...current, nomeExibicao: event.target.value.slice(0, 60) }))}
-                      />
-                    </label>
-                    <label>
-                      E-mail
-                      <input
-                        value={registerDraft.email}
-                        onChange={(event) => setRegisterDraft((current) => ({ ...current, email: event.target.value.trim() }))}
-                      />
-                    </label>
-                    <label>
-                      Senha
-                      <input
-                        type="password"
-                        value={registerDraft.senha}
-                        onChange={(event) => setRegisterDraft((current) => ({ ...current, senha: event.target.value }))}
-                      />
-                    </label>
-                    <label>
-                      CPF ou CNPJ
-                      <input
-                        value={registerDraft.documento}
-                        onChange={(event) => setRegisterDraft((current) => ({ ...current, documento: event.target.value }))}
-                      />
-                    </label>
-                    <label>
-                      Telefone
-                      <input
-                        value={registerDraft.telefone}
-                        onChange={(event) => setRegisterDraft((current) => ({ ...current, telefone: event.target.value }))}
-                      />
-                    </label>
-                  </div>
+                  {registerStep === 1 ? (
+                    <div className="form-stack auth-form-stack native-form-stack">
+                      <label>Nome completo*<input value={registerDraft.nomeExibicao} onChange={(event) => setRegisterDraft((current) => ({ ...current, nomeExibicao: event.target.value.slice(0, 60) }))} /></label>
+                      <label>Email*<input value={registerDraft.email} onChange={(event) => setRegisterDraft((current) => ({ ...current, email: event.target.value.trim() }))} /></label>
+                      <label>CPF*<input value={registerDraft.documento} onChange={(event) => setRegisterDraft((current) => ({ ...current, documento: event.target.value }))} /></label>
+                      <label>Data de nascimento*<input value={registerDraft.nascimento} onChange={(event) => setRegisterDraft((current) => ({ ...current, nascimento: event.target.value }))} /></label>
+                      <label>Celular*<input value={registerDraft.telefone} onChange={(event) => setRegisterDraft((current) => ({ ...current, telefone: event.target.value }))} /></label>
+                    </div>
+                  ) : null}
 
-                  <div className={`validation-row ${documentReady ? "ok" : ""}`}>
-                    <FileCheck size={18} />
-                    <span>{documentReady ? "Documento com formato pronto para validação" : "Informe CPF ou CNPJ válido"}</span>
-                  </div>
+                  {registerStep === 2 ? (
+                    <div className="form-stack auth-form-stack native-form-stack">
+                      <label className="password-field">Senha<input type={showPassword ? "text" : "password"} value={registerDraft.senha} onChange={(event) => setRegisterDraft((current) => ({ ...current, senha: event.target.value }))} /><button type="button" onClick={() => setShowPassword((current) => !current)}><Eye size={26} /></button></label>
+                      <label className="password-field">Confirmar senha<input type={showPassword ? "text" : "password"} value={registerDraft.confirmarSenha} onChange={(event) => setRegisterDraft((current) => ({ ...current, confirmarSenha: event.target.value }))} /><button type="button" onClick={() => setShowPassword((current) => !current)}><Eye size={26} /></button></label>
+                    </div>
+                  ) : null}
+
+                  {registerStep === 3 ? (
+                    <div className="form-stack auth-form-stack native-form-stack">
+                      <label>CEP*<input value={registerDraft.cep} placeholder="_____-___" onChange={(event) => setRegisterDraft((current) => ({ ...current, cep: event.target.value }))} /></label>
+                      <div className="native-double-grid">
+                        <label>UF*<input value={registerDraft.uf} placeholder="UF" onChange={(event) => setRegisterDraft((current) => ({ ...current, uf: event.target.value.toUpperCase().slice(0, 2) }))} /></label>
+                        <label>Município*<input value={registerDraft.municipio} placeholder="Digite sua cidade" onChange={(event) => setRegisterDraft((current) => ({ ...current, municipio: event.target.value }))} /></label>
+                      </div>
+                      <label>Rua*<input value={registerDraft.rua} placeholder="Rua" onChange={(event) => setRegisterDraft((current) => ({ ...current, rua: event.target.value }))} /></label>
+                      <div className="native-double-grid">
+                        <label>Bairro*<input value={registerDraft.bairro} placeholder="Bairro" onChange={(event) => setRegisterDraft((current) => ({ ...current, bairro: event.target.value }))} /></label>
+                        <label>Número*<input value={registerDraft.numero} placeholder="0" onChange={(event) => setRegisterDraft((current) => ({ ...current, numero: event.target.value }))} /></label>
+                      </div>
+                      <label>Complemento<input value={registerDraft.complemento} placeholder="Apartamento 3" onChange={(event) => setRegisterDraft((current) => ({ ...current, complemento: event.target.value }))} /></label>
+                    </div>
+                  ) : null}
                 </>
               )}
             </section>
-
-            {mode === "register" ? (
-              <label className="terms-panel auth-terms-panel">
-                <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
-                <span>
-                  Li os Termos de Uso e a Política de Privacidade. O aceite gera trilha de auditoria com IP, data do servidor e
-                  hash SHA-256 da versão jurídica vigente.
-                </span>
-              </label>
-            ) : null}
+            )}
 
             {mode === "login" ? (
               <>
@@ -2212,11 +2218,15 @@ function AuthScreen({ onAuthenticated, sessionNotice }) {
                   Ainda não tem cadastro? Criar conta
                 </button>
               </>
-            ) : (
-              <button className="primary-action auth-main-button" disabled={!documentReady || !accepted || loading} onClick={register}>
-                {loading ? "Validando..." : "Continuar cadastro"}
+            ) : !showRegisterTerms ? (
+              <button
+                className="primary-action auth-main-button native-register-action"
+                disabled={(registerStep === 3 && !addressStepReady) || loading}
+                onClick={registerStep === 3 ? register : advanceRegister}
+              >
+                {loading ? "Validando..." : registerStep === 3 ? "Concluir" : "Avançar"}
               </button>
-            )}
+            ) : null}
           </>
         )}
 
@@ -2334,124 +2344,64 @@ function HomeScreen({
   }, [profissionais, searchTerm, selectedCategory]);
 
   return (
-    <main className="screen">
-      <header className="home-top">
-        <div>
-          <h1>Ola</h1>
-          <p>
-            <MapPin size={14} />
-            {serviceOrder.neighborhood}
-          </p>
-        </div>
-      </header>
-
-      <section className="home-intro-card">
-        <div className="home-intro-copy">
-          <strong>Encontre um profissional ou publique seu pedido</strong>
-          <span>Comece pela busca ou abra uma solicitação para receber orçamentos.</span>
-        </div>
-        <div className="home-intro-actions">
-          <button className="primary-action compact-action" onClick={onOpenQuotes}>
-            Pedir orçamentos
-          </button>
-          <button className="secondary-action compact-action" onClick={onOpenProfile}>
-            Ver perfil
-          </button>
-        </div>
+    <main className="screen native-screen">
+      <section className="native-hero compact">
+        <span className="statusbar-space" />
+        <h1>Inicio</h1>
       </section>
 
-      {auth?.contaDemo ? (
-        <section className="inline-result">
-          <ShieldAlert size={16} />
-          Conta demo ativa. A navegação permanece liberada, mas ações financeiras e operações sensíveis ficam bloqueadas.
-        </section>
-      ) : null}
+      <section className="native-sheet home-native-sheet">
+        <h2>Para começar, finalize as etapas abaixo para aprovarmos o seu cadastro:</h2>
 
-      <label className="search-box">
-        <Search size={19} />
-        <input
-          placeholder="Buscar serviço ou profissional"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-        />
-      </label>
-
-      <div className="category-strip">
-        {categoryNames.map((item) => (
-          <button key={item} className={item === selectedCategory ? "active" : ""} onClick={() => setSelectedCategory(item)}>
-            {item}
-          </button>
-        ))}
-      </div>
-
-      <section className="info-section">
-        <h2>Categorias</h2>
-        <p>Escolha uma área para refinar a busca.</p>
-        <StatusMessage state={categoriasStatus} />
-        <div className="category-results">
-          {categoriasLoading ? (
-            <div className="empty-state compact-state">
-              <Clock3 size={20} />
-              <strong>Carregando categorias</strong>
-              <span>Consultando a API publicada.</span>
-            </div>
-          ) : visibleCategories.length === 0 ? (
-            <div className="empty-state compact-state">
-              <Search size={20} />
-              <strong>Nenhum resultado encontrado</strong>
-              <span>Ajuste a busca ou troque a categoria selecionada.</span>
-            </div>
-          ) : (
-            visibleCategories.map((category) => (
-              <CategoryCard key={category.id} category={category} onSelectSubcategory={setSearchTerm} />
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="info-section">
-        <div className="section-title-row">
+        <button className="approval-card">
           <div>
-            <h2>Profissionais disponiveis</h2>
-            <p>Selecione um serviço para seguir com negociação e confirmação.</p>
+            <strong>1. Envio do Documento</strong>
+            <span>
+              <Clock3 size={16} />
+              Envio pendente
+            </span>
           </div>
-          <span className="section-count">{visibleProfessionals.length}</span>
-        </div>
-        <StatusMessage state={profissionaisStatus} />
-        <div className="professional-results">
-          {profissionaisLoading ? (
-            <div className="empty-state compact-state">
-              <Clock3 size={20} />
-              <strong>Carregando vitrine</strong>
-              <span>Buscando profissionais públicos da API.</span>
-            </div>
-          ) : visibleProfessionals.length === 0 ? (
-            <div className="empty-state compact-state">
-              <Search size={20} />
-              <strong>Nenhum profissional encontrado</strong>
-              <span>Tente outra categoria ou ajuste a busca.</span>
-            </div>
-          ) : (
-            visibleProfessionals.map((item) => (
-              <ProfessionalCard key={item.id} item={item} onHire={onSelectProfessional} />
-            ))
-          )}
-        </div>
-      </section>
+          <ChevronDown size={26} />
+        </button>
 
-      <section className="home-summary-card">
-        <div className="home-summary-head">
-          <Shield size={18} />
-          <strong>Pagamento e segurança</strong>
-        </div>
-        <p>Cartao e Pix mantem garantia total. Dinheiro no local continua disponivel, com regras operacionais mostradas no checkout.</p>
-        <div className="home-payment-chips">
-          {paymentMethods.map((method) => (
-            <button key={method.id} className="payment-chip" onClick={() => setPayment(method.id)}>
-              {method.title}
+        <button className="approval-card" onClick={onOpenQuotes}>
+          <div>
+            <strong>2. Publicar primeira oferta</strong>
+            <small>Receba propostas e teste o fluxo de negociação.</small>
+          </div>
+          <ChevronRight size={24} />
+        </button>
+
+        {auth?.contaDemo ? (
+          <section className="inline-result warning">
+            <ShieldAlert size={16} />
+            Conta demo ativa. A navegação está liberada para validação visual.
+          </section>
+        ) : null}
+
+        <section className="help-card">
+          <div>
+            <strong>Ajuda</strong>
+            <p>Ficou com alguma dúvida? Estamos aqui para esclarecê-las.</p>
+            <button onClick={onOpenProfile}>
+              Saber mais <ChevronRight size={17} />
             </button>
-          ))}
-        </div>
+          </div>
+          <div className="help-illustration">
+            <CircleHelp size={64} />
+          </div>
+        </section>
+
+        <section className="quick-offer-strip">
+          <strong>Atalhos</strong>
+          <div>
+            {paymentMethods.map((method) => (
+              <button key={method.id} onClick={() => setPayment(method.id)}>
+                {method.title}
+              </button>
+            ))}
+          </div>
+        </section>
       </section>
     </main>
   );
@@ -2488,6 +2438,54 @@ function formatAcceptedDate(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function AgendaScreen({ auth }) {
+  const days = Array.from({ length: 31 }, (_, index) => index + 1);
+
+  return (
+    <main className="screen native-screen">
+      <section className="native-hero compact">
+        <span className="statusbar-space" />
+        <h1>Agenda</h1>
+      </section>
+      <section className="native-sheet agenda-sheet">
+        <section className="native-alert">
+          <Hourglass size={21} />
+          <span>
+            Aguarde! Estamos validando o seu cadastro. Para começar a receber ofertas é necessário ter o cadastro aprovado.
+          </span>
+        </section>
+
+        <section className="calendar-card">
+          <div className="calendar-head">
+            <button aria-label="Mês anterior">
+              <ChevronRight size={26} className="flip-icon" />
+            </button>
+            <strong>Julho 2026</strong>
+            <button aria-label="Próximo mês">
+              <ChevronRight size={26} />
+            </button>
+          </div>
+          <div className="calendar-grid week-days">
+            {["S", "T", "Q", "Q", "S", "S", "D"].map((day, index) => (
+              <span key={`${day}-${index}`}>{day}</span>
+            ))}
+          </div>
+          <div className="calendar-grid">
+            {days.map((day) => (
+              <button key={day} className={day === 9 ? "selected" : day < 6 ? "muted" : ""}>
+                {day}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <p className="native-empty-copy">Escolha uma data para conferir os atendimentos agendados.</p>
+        {auth?.contaDemo ? <StatusMessage state={{ type: "warning", message: "Conta demo ativa para navegação visual." }} /> : null}
+      </section>
+    </main>
+  );
 }
 
 export default function App() {
@@ -2931,6 +2929,9 @@ export default function App() {
         ) : null}
         {auth && activeScreen === "complete" ? (
           <CompleteScreen auth={authWithActions} projetoAtual={projetoAtual} onProjectUpdated={setProjetoAtual} selectedService={selectedService} />
+        ) : null}
+        {auth && activeScreen === "agenda" ? (
+          <AgendaScreen auth={authWithActions} />
         ) : null}
         {auth && activeScreen === "wallet" ? (
           <WalletScreen auth={authWithActions} />
